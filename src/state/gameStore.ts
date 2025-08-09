@@ -9,10 +9,13 @@ import type {
     TowerInstance,
     Vector2D,
     WaveState,
+    ProjectileInstance,
 } from '../types/game';
-import type { EnemyTypeConfig } from '../types/configs';
+import type { EnemyTypeConfig, TowerTypeConfig } from '../types/configs';
 import WaveManager from '../services/WaveManager';
-import EnemyManager from '../services/EnemyManager';
+import EnemyManager from '../services/entities/EnemyManager';
+import TowerManager from '../services/entities/TowerManager';
+import ProjectileManager from '../services/entities/ProjectileManager';
 import ConfigService from '../services/ConfigService';
 
 const DUMMY_PATH: Vector2D[] = [
@@ -31,16 +34,26 @@ export interface GameActions {
     addGold: (amount: number) => void;
     removeHealth: (amount: number) => void;
     setWaveState: (waveState: Partial<WaveState>) => void;
+    // Enemy Actions
     spawnEnemy: (config: EnemyTypeConfig, path: Vector2D[]) => void;
-    removeEnemy: (enemyId: string) => void; // Action to remove an enemy
-    updateEnemy: (enemyId: string, updates: Partial<EnemyInstance>) => void; // Action to update an enemy
+    removeEnemy: (enemyId: string) => void;
+    updateEnemy: (enemyId: string, updates: Partial<EnemyInstance>) => void;
+    damageEnemy: (enemyId: string, amount: number) => void;
+    // Tower Actions
+    placeTower: (config: TowerTypeConfig, tile: Vector2D) => void;
+    // Projectile Actions
+    spawnProjectile: (tower: TowerInstance, target: EnemyInstance) => void;
+    removeProjectile: (projectileId: string) => void;
+    // Session
     initializeGameSession: () => void;
     update: (dt: number) => void;
 }
 
 export interface GameStateWithManagers extends GameState {
     waveManager: WaveManager | null;
-    enemyManager: EnemyManager | null; // Add enemy manager instance
+    enemyManager: EnemyManager | null;
+    towerManager: TowerManager | null;
+    projectileManager: ProjectileManager | null;
 }
 
 const initialState: GameStateWithManagers = {
@@ -48,32 +61,29 @@ const initialState: GameStateWithManagers = {
     gold: 200,
     health: 25,
     currentWave: 0,
-    waveState: {
-        waveInProgress: false,
-        timeToNextWave: 10,
-        spawnQueue: [],
-        spawnCooldown: 0,
-    },
+    waveState: { waveInProgress: false, timeToNextWave: 10, spawnQueue: [], spawnCooldown: 0 },
     enemies: {},
     towers: {},
     projectiles: {},
     selectedTowerForBuild: null,
     selectedTowerInstanceId: null,
     waveManager: null,
-    enemyManager: null, // Initialize as null
+    enemyManager: null,
+    towerManager: null,
+    projectileManager: null,
 };
 
 export const useGameStore = create<GameStateWithManagers & GameActions>((set, get) => ({
     ...initialState,
 
-    setAppStatus: (status: AppStatus) => set({ appStatus: status }),
-    addGold: (amount: number) => set((state) => ({ gold: state.gold + amount })),
-    removeHealth: (amount: number) =>
-        set((state) => ({ health: Math.max(0, state.health - amount) })),
-    setWaveState: (waveState: Partial<WaveState>) => {
-        set((state) => ({ waveState: { ...state.waveState, ...state.waveState, ...waveState } }));
-    },
-    spawnEnemy: (config: EnemyTypeConfig, path: Vector2D[]) => {
+    // --- Actions ---
+    setAppStatus: (status) => set({ appStatus: status }),
+    addGold: (amount) => set((state) => ({ gold: state.gold + amount })),
+    removeHealth: (amount) => set((state) => ({ health: Math.max(0, state.health - amount) })),
+    setWaveState: (waveState) =>
+        set((state) => ({ waveState: { ...state.waveState, ...waveState } })),
+
+    spawnEnemy: (config, path) => {
         const newEnemy: EnemyInstance = {
             id: uuidv4(),
             config,
@@ -85,45 +95,94 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
             currentSpeed: config.base_stats.speed,
             currentArmor: config.base_stats.armor,
         };
-        set((state) => ({
-            enemies: { ...state.enemies, [newEnemy.id]: newEnemy },
-        }));
+        set((state) => ({ enemies: { ...state.enemies, [newEnemy.id]: newEnemy } }));
     },
 
-    removeEnemy: (enemyId: string) => {
+    removeEnemy: (enemyId) =>
         set((state) => {
             const newEnemies = { ...state.enemies };
             delete newEnemies[enemyId];
             return { enemies: newEnemies };
-        });
+        }),
+
+    updateEnemy: (enemyId, updates) =>
+        set((state) => {
+            const enemy = state.enemies[enemyId];
+            if (!enemy) return {};
+            return { enemies: { ...state.enemies, [enemyId]: { ...enemy, ...updates } } };
+        }),
+
+    damageEnemy: (enemyId, amount) =>
+        set((state) => {
+            const enemy = state.enemies[enemyId];
+            if (!enemy) return {};
+            const newHp = enemy.currentHp - amount;
+            if (newHp <= 0) {
+                const newEnemies = { ...state.enemies };
+                delete newEnemies[enemyId];
+                return { enemies: newEnemies, gold: state.gold + enemy.config.base_stats.bounty };
+            }
+            return { enemies: { ...state.enemies, [enemyId]: { ...enemy, currentHp: newHp } } };
+        }),
+
+    placeTower: (config, tile) => {
+        const newTower: TowerInstance = {
+            id: uuidv4(),
+            config,
+            tilePosition: tile,
+            cooldown: 0,
+            currentPersona: 'SOLDIER',
+            appliedUpgradeIds: [],
+            totalInvestment: config.cost,
+            currentDamage: config.attack?.data.damage ?? 0,
+            currentRange: config.attack?.data.range ?? 0,
+            currentFireRate: config.attack?.data.fire_rate ?? 0,
+        };
+        set((state) => ({
+            towers: { ...state.towers, [newTower.id]: newTower },
+            gold: state.gold - config.cost,
+        }));
     },
 
-    updateEnemy: (enemyId: string, updates: Partial<EnemyInstance>) => {
-        set((state) => {
-            const enemyToUpdate = state.enemies[enemyId];
-            if (!enemyToUpdate) return {};
-            const updatedEnemy = { ...enemyToUpdate, ...updates };
-            const newEnemies = { ...state.enemies, [enemyId]: updatedEnemy };
-            return { enemies: newEnemies };
-        });
+    spawnProjectile: (tower, target) => {
+        if (!tower.config.attack) return;
+        const newProjectile: ProjectileInstance = {
+            id: uuidv4(),
+            position: { x: tower.tilePosition.x * 32 + 16, y: tower.tilePosition.y * 32 + 16 },
+            targetId: target.id,
+            speed: 500, // Placeholder speed
+            damage: tower.currentDamage,
+            blastRadius: tower.config.attack.data.blast_radius,
+        };
+        set((state) => ({
+            projectiles: { ...state.projectiles, [newProjectile.id]: newProjectile },
+        }));
     },
+
+    removeProjectile: (projectileId) =>
+        set((state) => {
+            const newProjectiles = { ...state.projectiles };
+            delete newProjectiles[projectileId];
+            return { projectiles: newProjectiles };
+        }),
 
     initializeGameSession: () => {
-        if (!ConfigService.configs) {
-            console.error('Cannot initialize game session: Configs are not loaded.');
-            return;
-        }
-        console.log('Initializing game session and creating managers...');
+        if (!ConfigService.configs) return;
         const waveManager = new WaveManager(ConfigService.configs, DUMMY_PATH);
-        const enemyManager = new EnemyManager(); // EnemyManager is stateless
-        set({ waveManager, enemyManager, appStatus: 'in-game' });
+        const enemyManager = new EnemyManager();
+        const towerManager = new TowerManager();
+        const projectileManager = new ProjectileManager();
+        set({ waveManager, enemyManager, towerManager, projectileManager, appStatus: 'in-game' });
     },
 
-    update: (dt: number) => {
-        const { appStatus, waveManager, enemyManager } = get();
+    update: (dt) => {
+        const { appStatus, waveManager, enemyManager, towerManager, projectileManager } = get();
         if (appStatus !== 'in-game') return;
 
-        if (waveManager) waveManager.update(get, set, dt);
-        if (enemyManager) enemyManager.update(get, set, dt);
+        // Update managers in a logical order
+        towerManager?.update(get, set, dt);
+        projectileManager?.update(get, set, dt);
+        enemyManager?.update(get, set, dt);
+        waveManager?.update(get, set, dt);
     },
 }));
