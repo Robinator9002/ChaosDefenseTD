@@ -73,10 +73,10 @@ class EnemyManager {
 
         // After iterating through all enemies, apply the batched updates in a single call.
         if (hasChanges) {
-            set((state) => ({
+            set({
                 enemies: updatedEnemies,
                 health: updatedHealth, // Update health as part of the batch
-            }));
+            });
         }
     }
 
