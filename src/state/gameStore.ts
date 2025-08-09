@@ -12,7 +12,7 @@ import type {
     ProjectileInstance,
 } from '../types/game';
 import type { EnemyTypeConfig, TowerTypeConfig } from '../types/configs';
-import WaveManager from '../services/WaveManager';
+import WaveManager from '../services/waves/WaveManager';
 import EnemyManager from '../services/entities/EnemyManager';
 import TowerManager from '../services/entities/TowerManager';
 import ProjectileManager from '../services/entities/ProjectileManager';

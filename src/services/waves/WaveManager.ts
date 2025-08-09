@@ -1,10 +1,10 @@
 // src/services/WaveManager.ts
 
-import type { GameState, Vector2D } from '../types/game';
+import type { GameState, Vector2D } from '../../types/game';
 // FIX: Correctly import AllConfigs from its definitive source: ../types/configs
-import type { AllConfigs } from '../types/configs';
+import type { AllConfigs } from '../../types/configs';
 import type { StoreApi } from 'zustand';
-import type { GameActions } from '../state/gameStore';
+import type { GameActions } from '../../state/gameStore';
 
 type GameStore = GameState & GameActions;
 

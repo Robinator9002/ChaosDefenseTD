@@ -1,6 +1,6 @@
 // src/services/Pathfinder.ts
 
-import type { Vector2D } from '../types/game';
+import type { Vector2D } from '../../types/game';
 
 /**
  * Represents a single node in the pathfinding grid.
