@@ -3,9 +3,8 @@
 import type { GameState, Vector2D } from '../types/game';
 import type { AllConfigs } from './ConfigService';
 import type { StoreApi } from 'zustand';
-import type { GameActions } from '../state/gameStore'; // We'll need this type soon
+import type { GameActions } from '../state/gameStore';
 
-// A helper type for the Zustand store to avoid circular dependencies
 type GameStore = GameState & GameActions;
 
 /**
@@ -15,7 +14,7 @@ type GameStore = GameState & GameActions;
  */
 class WaveManager {
     private configs: AllConfigs;
-    private mainPath: Vector2D[]; // The path enemies will follow
+    private mainPath: Vector2D[];
 
     constructor(configs: AllConfigs, mainPath: Vector2D[]) {
         if (!configs) {
@@ -25,18 +24,12 @@ class WaveManager {
         this.mainPath = mainPath;
     }
 
-    /**
-     * The main update function for the wave manager, called on every game tick.
-     * @param get A function to get the current state from the Zustand store.
-     * @param set A function to set the state in the Zustand store.
-     * @param dt Delta time since the last frame.
-     */
     public update(
         get: StoreApi<GameStore>['getState'],
         set: StoreApi<GameStore>['setState'],
         dt: number,
     ): void {
-        const { waveState, currentWave } = get();
+        const { waveState } = get();
 
         if (waveState.waveInProgress) {
             this.handleSpawning(get, set, dt);
@@ -45,9 +38,6 @@ class WaveManager {
         }
     }
 
-    /**
-     * Handles the countdown timer between waves.
-     */
     private handleWaveCountdown(
         get: StoreApi<GameStore>['getState'],
         set: StoreApi<GameStore>['setState'],
@@ -59,15 +49,12 @@ class WaveManager {
         if (newTimeToNextWave <= 0) {
             this.startNextWave(get, set);
         } else {
-            set((state: any) => ({
+            set((state) => ({
                 waveState: { ...state.waveState, timeToNextWave: newTimeToNextWave },
             }));
         }
     }
 
-    /**
-     * Handles the spawning of enemies from the queue during an active wave.
-     */
     private handleSpawning(
         get: StoreApi<GameStore>['getState'],
         set: StoreApi<GameStore>['setState'],
@@ -76,16 +63,17 @@ class WaveManager {
         const { spawnQueue, spawnCooldown } = get().waveState;
 
         if (spawnQueue.length === 0) {
-            // If queue is empty and all enemies are defeated, the wave ends.
-            // We'll add the "all enemies defeated" check in the EnemyManager.
-            // For now, let's assume the wave ends when the queue is empty.
             if (Object.keys(get().enemies).length === 0) {
                 console.log(`Wave ${get().currentWave} complete!`);
-                set((state: any) => ({
+                const difficulty = String(this.configs.gameSettings.difficulty);
+                const timeBetweenWaves =
+                    this.configs.difficultyScaling[difficulty].time_between_waves;
+
+                set((state) => ({
                     waveState: {
                         ...state.waveState,
                         waveInProgress: false,
-                        timeToNextWave: this.configs.difficultyScaling['1'].time_between_waves, // Reset timer
+                        timeToNextWave: timeBetweenWaves,
                     },
                 }));
             }
@@ -101,10 +89,9 @@ class WaveManager {
                 get().spawnEnemy(enemyConfig, this.mainPath);
             }
 
-            // Reset cooldown and remove the spawned enemy from the queue
             const { waveScaling } = this.configs;
-            const nextCooldown = waveScaling.spawn_cooldown.base_seconds; // Simplified for now
-            set((state: any) => ({
+            const nextCooldown = waveScaling.spawn_cooldown.base_seconds;
+            set((state) => ({
                 waveState: {
                     ...state.waveState,
                     spawnQueue: state.waveState.spawnQueue.slice(1),
@@ -112,15 +99,12 @@ class WaveManager {
                 },
             }));
         } else {
-            set((state: any) => ({
+            set((state) => ({
                 waveState: { ...state.waveState, spawnCooldown: newSpawnCooldown },
             }));
         }
     }
 
-    /**
-     * Composes and initiates the next wave of enemies.
-     */
     private startNextWave(
         get: StoreApi<GameStore>['getState'],
         set: StoreApi<GameStore>['setState'],
@@ -129,35 +113,37 @@ class WaveManager {
         console.log(`Starting Wave ${newWaveNumber}`);
 
         const { waveScaling, enemyTypes } = this.configs;
-        const levelDifficulty = 1; // Placeholder for now
+        const levelDifficulty = 1;
 
-        // Calculate how many enemies to spawn this wave
         const enemyCount = Math.floor(
             waveScaling.enemy_count.base +
                 waveScaling.enemy_count.per_wave * newWaveNumber +
                 waveScaling.enemy_count.per_level_difficulty * levelDifficulty,
         );
 
-        // Create the spawn queue
         const spawnQueue: string[] = [];
         const availableEnemies = Object.keys(enemyTypes).filter(
             (id) => enemyTypes[id].min_level_difficulty <= levelDifficulty,
         );
 
+        if (availableEnemies.length === 0) {
+            console.error('No available enemies for the current difficulty level!');
+            return;
+        }
+
         for (let i = 0; i < enemyCount; i++) {
-            // Simple random selection for now
             const randomEnemyId =
                 availableEnemies[Math.floor(Math.random() * availableEnemies.length)];
             spawnQueue.push(randomEnemyId);
         }
 
-        set((state: any) => ({
+        set((state) => ({
             currentWave: newWaveNumber,
             waveState: {
                 ...state.waveState,
                 waveInProgress: true,
                 spawnQueue: spawnQueue,
-                spawnCooldown: 0, // Start spawning immediately
+                spawnCooldown: 0,
             },
         }));
     }

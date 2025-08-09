@@ -11,7 +11,6 @@
 // Reusable Sub-Types
 // =================================================================
 
-/** Defines a single stat line displayed in a tower's info panel. */
 export interface InfoPanelStat {
     label: string;
     value_path: string;
@@ -19,7 +18,6 @@ export interface InfoPanelStat {
     description?: string;
 }
 
-/** Defines a status effect that can be applied by a tower or enemy. */
 export interface StatusEffectValue {
     id: string;
     potency: number;
@@ -27,10 +25,9 @@ export interface StatusEffectValue {
 }
 
 // =================================================================
-// Tower Configurations (`tower_types.json`, `upgrades/towers/*.json`)
+// Tower Configurations
 // =================================================================
 
-/** Defines the attack properties of a tower. */
 export interface TowerAttack {
     type: 'standard_projectile' | 'persistent_ground_aura' | 'persistent_attached_aura';
     data: {
@@ -48,14 +45,12 @@ export interface TowerAttack {
     };
 }
 
-/** Defines an aura emitted by a support tower. */
 export interface TowerAura {
     range: number;
     target_type: 'TOWER';
     effects: Record<string, { potency: number; duration: number }>;
 }
 
-/** Defines the structure for a single tower type in `tower_types.json`. */
 export interface TowerTypeConfig {
     name: string;
     category: 'military' | 'elemental' | 'artillery' | 'magic' | 'support';
@@ -72,13 +67,11 @@ export interface TowerTypeConfig {
     };
 }
 
-/** Defines a single upgrade effect within an upgrade's `effects` array. */
 export interface UpgradeEffect {
     type: 'add_damage' | 'add_range' | 'multiply_fire_rate' | 'add_blast_effect';
     value: number | StatusEffectValue;
 }
 
-/** Defines a single upgrade within a path. */
 export interface UpgradeConfig {
     id: string;
     name: string;
@@ -88,30 +81,26 @@ export interface UpgradeConfig {
     effects: UpgradeEffect[];
 }
 
-/** Defines a single upgrade path (e.g., "path_a"). */
 export interface UpgradePath {
     name: string;
     description: string;
     upgrades: UpgradeConfig[];
 }
 
-/** Defines the structure of a complete tower upgrade file (e.g., `mortar.json`). */
 export interface TowerUpgradeFile {
     path_a: UpgradePath;
     path_b: UpgradePath;
 }
 
 // =================================================================
-// Enemy & AI Configurations (`enemy_types.json`, `formations.json`, `targeting_ai.json`)
+// Enemy & AI Configurations
 // =================================================================
 
-/** Defines the visual properties of an enemy. */
 export interface EnemyRenderProps {
     size: number;
     color: [number, number, number];
 }
 
-/** Defines the base stats for an enemy type. */
 export interface EnemyBaseStats {
     hp: number;
     speed: number;
@@ -121,7 +110,6 @@ export interface EnemyBaseStats {
     immunities?: string[];
 }
 
-/** Defines the additive stat scaling per level for an enemy. */
 export interface EnemyScaling {
     hp?: number;
     speed?: number;
@@ -129,7 +117,6 @@ export interface EnemyScaling {
     armor?: number;
 }
 
-/** Defines the structure for a single enemy type in `enemy_types.json`. */
 export interface EnemyTypeConfig {
     name: string;
     min_level_difficulty: number;
@@ -138,7 +125,6 @@ export interface EnemyTypeConfig {
     scaling_per_level_add: EnemyScaling;
 }
 
-/** Defines a single AI targeting persona from `targeting_ai.json`. */
 export interface TargetingPersona {
     name: string;
     description: string;
@@ -149,7 +135,6 @@ export interface TargetingPersona {
 // Gameplay & Level Configurations
 // =================================================================
 
-/** Defines the structure for `game_settings.json`. */
 export interface GameSettings {
     screen_width: number;
     screen_height: number;
@@ -160,7 +145,6 @@ export interface GameSettings {
     initial_unlocked_towers: string[];
 }
 
-/** Defines a single global upgrade from `global_upgrades.json`. */
 export interface GlobalUpgrade {
     name: string;
     cost: number;
@@ -175,7 +159,6 @@ export interface GlobalUpgrade {
     }[];
 }
 
-/** Defines the generation parameters for a level style. */
 export interface LevelGenerationParams {
     grid_width: number;
     grid_height: number;
@@ -188,15 +171,58 @@ export interface LevelGenerationParams {
     features: Record<string, { min: number; max: number }>;
 }
 
-/** Defines a single tile type within a level's style. */
 export interface TileDefinition {
     color: [number, number, number];
     sprite: string;
 }
 
-/** Defines the structure of a single level style in `level_styles.json`. */
 export interface LevelStyleConfig {
     background_color: [number, number, number];
     generation_params: LevelGenerationParams;
     tile_definitions: Record<string, TileDefinition>;
+}
+
+// --- NEW: Specific types for scaling configs ---
+export interface WaveScalingConfig {
+    enemy_count: {
+        base: number;
+        per_wave: number;
+        per_level_difficulty: number;
+    };
+    spawn_cooldown: {
+        base_seconds: number;
+        reduction_per_wave: number;
+        reduction_per_level_difficulty: number;
+        minimum_seconds: number;
+    };
+}
+
+export interface DifficultySetting {
+    name: string;
+    stat_modifier: number;
+    time_between_waves: number;
+    max_waves: number;
+    level_difficulty_increase_interval: number;
+    salvage_refund_percentage: number;
+}
+
+export type DifficultyScalingConfig = Record<string, DifficultySetting>;
+
+// --- NEW: Stricter AllConfigs type ---
+/**
+ * Defines the final, structured shape of all loaded configuration data.
+ * This is now a strict interface, ensuring type safety when accessing configs.
+ */
+export interface AllConfigs {
+    towerTypes: Record<string, TowerTypeConfig>;
+    towerUpgrades: Record<string, TowerUpgradeFile>;
+    enemyTypes: Record<string, EnemyTypeConfig>;
+    gameSettings: GameSettings;
+    globalUpgrades: Record<string, GlobalUpgrade>;
+    levelStyles: Record<string, LevelStyleConfig>;
+    targetingAi: Record<string, TargetingPersona>;
+    difficultyScaling: DifficultyScalingConfig;
+    waveScaling: WaveScalingConfig;
+    statusEffects: Record<string, unknown>; // Define more strictly if needed
+    formations: Record<string, unknown>; // Define more strictly if needed
 }
