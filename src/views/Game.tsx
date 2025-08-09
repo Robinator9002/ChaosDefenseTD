@@ -1,6 +1,5 @@
 // src/views/Game.tsx
 
-import { GameLoop } from '../core/GameLoop';
 import { GameCanvas } from '../components/game/GameCanvas';
 
 /**
@@ -13,9 +12,6 @@ import { GameCanvas } from '../components/game/GameCanvas';
 export const Game = () => {
     return (
         <div className="relative w-full h-screen bg-chaos-primary">
-            {/* The GameLoop is a non-visual component that drives updates */}
-            <GameLoop />
-
             {/* The GameCanvas handles all the rendering of the game world */}
             <GameCanvas />
 
