@@ -1,6 +1,6 @@
-// src/components/hud/TopStatsBar.tsx
+// src/components/hud/bars/TopStatsBar.tsx
 
-import { useGameStore } from '../../state/gameStore';
+import { useGameStore } from '../../../state/gameStore';
 
 /**
  * A heads-up display (HUD) component that shows the player's core stats:
