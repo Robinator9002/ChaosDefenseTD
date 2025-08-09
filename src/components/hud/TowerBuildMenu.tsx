@@ -3,16 +3,19 @@
 import { useGameStore } from '../../state/gameStore';
 import ConfigService from '../../services/ConfigService';
 import type { TowerTypeConfig } from '../../types/configs';
+// No need for 'shallow' anymore with individual selectors
+// import { shallow } from 'zustand/shallow';
 
 /**
  * A single button in the build menu representing a tower.
  */
 const TowerButton = ({ towerId, config }: { towerId: string; config: TowerTypeConfig }) => {
-    const { gold, selectedTowerForBuild, setSelectedTowerForBuild } = useGameStore((state) => ({
-        gold: state.gold,
-        selectedTowerForBuild: state.selectedTowerForBuild,
-        setSelectedTowerForBuild: state.setSelectedTowerForBuild,
-    }));
+    // --- FIX ---
+    // We now use individual selectors for each state property.
+    // This prevents the component from re-rendering infinitely due to new object references.
+    const gold = useGameStore((state) => state.gold);
+    const selectedTowerForBuild = useGameStore((state) => state.selectedTowerForBuild);
+    const setSelectedTowerForBuild = useGameStore((state) => state.setSelectedTowerForBuild);
 
     const canAfford = gold >= config.cost;
     const isSelected = selectedTowerForBuild === towerId;
@@ -28,12 +31,10 @@ const TowerButton = ({ towerId, config }: { towerId: string; config: TowerTypeCo
             ? '!bg-chaos-accent !border-yellow-300 ring-2 ring-yellow-300 scale-110'
             : '';
 
-    // --- FIX: Defensively handle missing placeholder_color ---
-    // If a tower config (like a support tower) doesn't have a color,
-    // provide a sensible default instead of crashing.
+    // Defensively handle missing placeholder_color
     const displayColor = config.placeholder_color
         ? `rgb(${config.placeholder_color.join(',')})`
-        : `rgb(100, 100, 120)`; // A neutral default color
+        : `rgb(100, 100, 120)`;
 
     return (
         <div
@@ -64,10 +65,8 @@ export const TowerBuildMenu = () => {
     return (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 p-4 rounded-lg bg-chaos-primary/80 backdrop-blur-sm border border-chaos-highlight shadow-lg">
             {Object.entries(towerTypes)
-                // Filter out any entries that are not valid tower configs (like JSON comments)
                 .filter(
-                    ([key, value]) =>
-                        typeof value === 'object' && value !== null && 'name' in value,
+                    ([, value]) => typeof value === 'object' && value !== null && 'name' in value,
                 )
                 .map(([id, config]) => (
                     <TowerButton key={id} towerId={id} config={config as TowerTypeConfig} />

@@ -22,66 +22,64 @@ class EnemyManager {
         set: StoreApi<GameStore>['setState'],
         dt: number,
     ): void {
-        const { enemies } = get();
-        const enemyIds = Object.keys(enemies);
+        const { enemies, health } = get(); // Also get health as it might be modified
+        const updatedEnemies: Record<string, EnemyInstance> = { ...enemies };
+        let updatedHealth = health; // Keep track of health changes locally
+        let hasChanges = false;
 
-        for (const id of enemyIds) {
-            const enemy = enemies[id];
+        for (const id in updatedEnemies) {
+            const enemy = updatedEnemies[id];
             if (!enemy) continue;
 
-            this.moveEnemy(get, set, enemy, dt);
+            // Handle enemy reaching the end of the path
+            if (enemy.pathIndex >= enemy.path.length - 1) {
+                console.log(`Enemy ${enemy.id} reached the end.`);
+                updatedHealth -= enemy.config.base_stats.damage; // Deduct health locally
+                delete updatedEnemies[id]; // Remove enemy locally
+                hasChanges = true;
+                continue; // Move to next enemy
+            }
+
+            // --- Move enemy logic ---
+            const targetPosition = enemy.path[enemy.pathIndex + 1];
+            const currentPosition = enemy.position;
+            const direction = this.getDirection(currentPosition, targetPosition);
+            const distanceToTarget = this.getDistance(currentPosition, targetPosition);
+            const distanceToMove = enemy.currentSpeed * dt;
+
+            let newPosition: Vector2D;
+            let nextPathIndex = enemy.pathIndex;
+
+            if (distanceToMove >= distanceToTarget) {
+                newPosition = { ...targetPosition };
+                nextPathIndex++;
+            } else {
+                newPosition = {
+                    x: currentPosition.x + direction.x * distanceToMove,
+                    y: currentPosition.y + direction.y * distanceToMove,
+                };
+            }
+
+            // Check if the position or pathIndex actually changed
+            if (
+                newPosition.x !== enemy.position.x ||
+                newPosition.y !== enemy.position.y ||
+                nextPathIndex !== enemy.pathIndex
+            ) {
+                updatedEnemies[id] = { ...enemy, position: newPosition, pathIndex: nextPathIndex };
+                hasChanges = true;
+            }
+        }
+
+        // After iterating through all enemies, apply the batched updates in a single call.
+        if (hasChanges) {
+            set((state) => ({
+                enemies: updatedEnemies,
+                health: updatedHealth, // Update health as part of the batch
+            }));
         }
     }
 
-    /**
-     * Handles the movement logic for a single enemy.
-     */
-    private moveEnemy(
-        get: StoreApi<GameStore>['getState'],
-        set: StoreApi<GameStore>['setState'],
-        enemy: EnemyInstance,
-        dt: number,
-    ): void {
-        // Check if enemy has reached the end of the path
-        if (enemy.pathIndex >= enemy.path.length - 1) {
-            console.log(`Enemy ${enemy.id} reached the end.`);
-            get().removeHealth(enemy.config.base_stats.damage);
-            get().removeEnemy(enemy.id);
-            return;
-        }
-
-        const targetPosition = enemy.path[enemy.pathIndex + 1];
-        const currentPosition = enemy.position;
-        const direction = this.getDirection(currentPosition, targetPosition);
-
-        const distanceToTarget = this.getDistance(currentPosition, targetPosition);
-        const distanceToMove = enemy.currentSpeed * dt;
-
-        let newPosition: Vector2D;
-        let nextPathIndex = enemy.pathIndex;
-
-        if (distanceToMove >= distanceToTarget) {
-            // The enemy has reached or overshot the target node
-            newPosition = { ...targetPosition };
-            nextPathIndex++;
-        } else {
-            // Move the enemy along the direction vector
-            newPosition = {
-                x: currentPosition.x + direction.x * distanceToMove,
-                y: currentPosition.y + direction.y * distanceToMove,
-            };
-        }
-
-        // Update the enemy's state in the store
-        get().updateEnemy(enemy.id, {
-            position: newPosition,
-            pathIndex: nextPathIndex,
-        });
-    }
-
-    /**
-     * Calculates the normalized direction vector between two points.
-     */
     private getDirection(from: Vector2D, to: Vector2D): Vector2D {
         const dx = to.x - from.x;
         const dy = to.y - from.y;
@@ -90,9 +88,6 @@ class EnemyManager {
         return { x: dx / length, y: dy / length };
     }
 
-    /**
-     * Calculates the Euclidean distance between two points.
-     */
     private getDistance(a: Vector2D, b: Vector2D): number {
         const dx = a.x - b.x;
         const dy = a.y - b.y;

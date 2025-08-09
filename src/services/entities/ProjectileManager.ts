@@ -1,6 +1,6 @@
 // src/services/entities/ProjectileManager.ts
 
-import type { GameState, Vector2D } from '../../types/game';
+import type { GameState, Vector2D, ProjectileInstance, EnemyInstance } from '../../types/game';
 import type { StoreApi } from 'zustand';
 import type { GameActions } from '../../state/gameStore';
 
@@ -17,13 +17,25 @@ class ProjectileManager {
         dt: number,
     ): void {
         const { projectiles, enemies } = get();
+        const updatedProjectiles: Record<string, ProjectileInstance> = { ...projectiles };
+        const updatedEnemies: Record<string, EnemyInstance> = { ...enemies }; // Need to update enemies if they take damage
+        let hasChanges = false;
 
-        for (const projectile of Object.values(projectiles)) {
-            const target = enemies[projectile.targetId];
+        // Using a temporary list of projectile IDs to iterate over
+        // to avoid issues if updatedProjectiles is modified during iteration
+        const projectileIds = Object.keys(updatedProjectiles);
 
-            // If target is gone, remove projectile
+        for (const id of projectileIds) {
+            const projectile = updatedProjectiles[id];
+            // Check if projectile still exists (might have been removed by another projectile in this frame)
+            if (!projectile) continue;
+
+            const target = updatedEnemies[projectile.targetId]; // Check target from our local copy
+
+            // If target is gone, mark projectile for removal and continue
             if (!target) {
-                get().removeProjectile(projectile.id);
+                delete updatedProjectiles[id]; // Remove from our local copy
+                hasChanges = true;
                 continue;
             }
 
@@ -34,9 +46,16 @@ class ProjectileManager {
 
             // Check for hit
             if (distanceToMove >= distanceToTarget) {
-                get().damageEnemy(target.id, projectile.damage);
-                get().removeProjectile(projectile.id);
-                // TODO: Handle blast radius damage
+                // Apply damage to the enemy directly in the local updatedEnemies copy
+                const newEnemyHealth = target.currentHealth - projectile.damage;
+                if (newEnemyHealth <= 0) {
+                    delete updatedEnemies[target.id]; // Remove enemy if health drops to 0 or below
+                } else {
+                    updatedEnemies[target.id] = { ...target, currentHealth: newEnemyHealth }; // Update enemy health
+                }
+                delete updatedProjectiles[id]; // Remove projectile locally
+                hasChanges = true;
+                // TODO: Handle blast radius damage (would also modify updatedEnemies)
                 continue;
             }
 
@@ -47,12 +66,18 @@ class ProjectileManager {
                 y: currentPosition.y + direction.y * distanceToMove,
             };
 
-            // Update projectile state
+            // Check if position actually changed to avoid unnecessary updates
+            if (newPosition.x !== currentPosition.x || newPosition.y !== currentPosition.y) {
+                updatedProjectiles[id] = { ...projectile, position: newPosition };
+                hasChanges = true;
+            }
+        }
+
+        // After iterating through all projectiles, apply the batched updates in a single call.
+        if (hasChanges) {
             set((state) => ({
-                projectiles: {
-                    ...state.projectiles,
-                    [projectile.id]: { ...projectile, position: newPosition },
-                },
+                projectiles: updatedProjectiles,
+                enemies: updatedEnemies, // Update enemies as part of the same batch
             }));
         }
     }
