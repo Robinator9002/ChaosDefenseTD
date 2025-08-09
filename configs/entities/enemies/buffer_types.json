@@ -1,0 +1,56 @@
+{
+  "//": "BALANCE PASS 1: Buffer enemies are now rarer, stronger, and appear later in the game. Their stats have been increased to make them high-priority targets when they do spawn.",
+
+  "regenerator": {
+    "//": "ROLE: A high-priority support unit that provides slow health regeneration to nearby enemies.",
+    "name": "Regenerator",
+    "min_level_difficulty": 8,
+    "render_props": { "size": 24, "color": [120, 230, 120] },
+    "base_stats": {
+      "hp": 150,
+      "speed": 50,
+      "bounty": 35,
+      "damage": 1,
+      "armor": 5
+    },
+    "scaling_per_level_add": { "hp": 15, "speed": 1, "bounty": 2, "armor": 1 },
+    "auras": [
+      {
+        "range": 110,
+        "target_type": "ENEMY",
+        "effects": {
+          "regeneration": { "potency": 8, "duration": 1.1 }
+        }
+      }
+    ]
+  },
+
+  "bulwark": {
+    "//": "ROLE: A defensive support unit that grants a flat armor bonus to nearby enemies, making swarms much tougher.",
+    "name": "Bulwark",
+    "min_level_difficulty": 10,
+    "render_props": { "size": 28, "color": [200, 200, 220] },
+    "base_stats": {
+      "hp": 250,
+      "speed": 45,
+      "bounty": 50,
+      "damage": 2,
+      "armor": 15
+    },
+    "scaling_per_level_add": {
+      "hp": 20,
+      "speed": 0,
+      "bounty": 3,
+      "armor": 1.5
+    },
+    "auras": [
+      {
+        "range": 100,
+        "target_type": "ENEMY",
+        "effects": {
+          "armor_boost": { "potency": 8, "duration": 1.1 }
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,99 @@
+{
+  "//": "ENEMY SCALING OVERHAUL: Replaced the exponential 'scaling_per_level' multiplier with a linear 'scaling_per_level_add' system. This provides a much smoother, more controllable difficulty curve and prevents late-game enemies from becoming impossibly powerful.",
+
+  "scout": {
+    "//": "ROLE: Early-game speed check. Tests map coverage and punishes slow-firing towers.",
+    "name": "Scout",
+    "min_level_difficulty": 1,
+    "render_props": { "size": 18, "color": [230, 120, 120] },
+    "base_stats": {
+      "hp": 14,
+      "speed": 130,
+      "bounty": 4,
+      "damage": 1,
+      "armor": 0
+    },
+    "scaling_per_level_add": { "hp": 1, "speed": 3, "bounty": 0.25 }
+  },
+
+  "grunt": {
+    "//": "ROLE: Generalist. The baseline enemy that makes up the bulk of early waves.",
+    "name": "Grunt",
+    "min_level_difficulty": 2,
+    "render_props": { "size": 22, "color": [200, 60, 60] },
+    "base_stats": {
+      "hp": 24,
+      "speed": 60,
+      "bounty": 6,
+      "damage": 1,
+      "armor": 2
+    },
+    "scaling_per_level_add": {
+      "hp": 2,
+      "speed": 1,
+      "bounty": 0.5,
+      "armor": 0.25
+    }
+  },
+
+  "tank": {
+    "//": "ROLE: Health sponge. A straightforward test of the player's raw damage output.",
+    "name": "Tank",
+    "min_level_difficulty": 5,
+    "render_props": { "size": 30, "color": [150, 40, 40] },
+    "base_stats": {
+      "hp": 100,
+      "speed": 50,
+      "bounty": 10,
+      "damage": 5,
+      "armor": 8
+    },
+    "scaling_per_level_add": { "hp": 10, "speed": 1, "bounty": 1, "armor": 0.5 }
+  },
+
+  "runner": {
+    "//": "ROLE: Late-game speed threat. A pure test of map coverage and high-velocity projectiles.",
+    "name": "Runner",
+    "min_level_difficulty": 8,
+    "render_props": { "size": 20, "color": [255, 180, 180] },
+    "base_stats": {
+      "hp": 40,
+      "speed": 160,
+      "bounty": 8,
+      "damage": 2,
+      "armor": 2
+    },
+    "scaling_per_level_add": { "hp": 3, "speed": 4, "bounty": 0.5 }
+  },
+
+  "guardian": {
+    "//": "ROLE: Armor wall. Requires sustained fire from armor-shredding towers to take down. IMMUNE TO SLOWS.",
+    "name": "Guardian",
+    "min_level_difficulty": 10,
+    "render_props": { "size": 26, "color": [180, 180, 200] },
+    "base_stats": {
+      "hp": 150,
+      "speed": 60,
+      "bounty": 25,
+      "damage": 3,
+      "armor": 30,
+      "immunities": ["slow", "stun"]
+    },
+    "scaling_per_level_add": { "hp": 15, "speed": 1, "bounty": 1.5, "armor": 1 }
+  },
+
+  "bomber": {
+    "//": "ROLE: High-priority strategic threat. Forces focus fire due to its devastating base damage.",
+    "name": "Bomber",
+    "min_level_difficulty": 12,
+    "render_props": { "size": 28, "color": [255, 140, 0] },
+    "base_stats": {
+      "hp": 120,
+      "speed": 100,
+      "bounty": 20,
+      "damage": 8,
+      "armor": 25
+    },
+    "scaling_per_level_add": { "hp": 12, "speed": 0, "bounty": 1.5, "armor": 1 }
+  }
+}
