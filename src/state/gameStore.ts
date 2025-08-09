@@ -18,8 +18,7 @@ import TowerManager from '../services/entities/TowerManager';
 import ProjectileManager from '../services/entities/ProjectileManager';
 import ConfigService from '../services/ConfigService';
 
-// --- FIX: Path coordinates are now scaled by TILE_SIZE ---
-const TILE_SIZE = 32; // Assuming a default for now
+const TILE_SIZE = 32;
 const DUMMY_PATH: Vector2D[] = [
     { x: 0 * TILE_SIZE, y: 10 * TILE_SIZE },
     { x: 5 * TILE_SIZE, y: 10 * TILE_SIZE },
@@ -43,6 +42,7 @@ export interface GameActions {
     damageEnemy: (enemyId: string, amount: number) => void;
     // Tower Actions
     placeTower: (config: TowerTypeConfig, tile: Vector2D) => void;
+    setSelectedTowerForBuild: (towerId: string | null) => void; // New action
     // Projectile Actions
     spawnProjectile: (tower: TowerInstance, target: EnemyInstance) => void;
     removeProjectile: (projectileId: string) => void;
@@ -146,6 +146,15 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
         }));
     },
 
+    setSelectedTowerForBuild: (towerId) =>
+        set((state) => {
+            // If clicking the same tower again, deselect it.
+            if (state.selectedTowerForBuild === towerId) {
+                return { selectedTowerForBuild: null };
+            }
+            return { selectedTowerForBuild: towerId };
+        }),
+
     spawnProjectile: (tower, target) => {
         if (!tower.config.attack) return;
         const TILE_SIZE = ConfigService.configs?.gameSettings.tile_size ?? 32;
@@ -156,7 +165,7 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
                 y: tower.tilePosition.y * TILE_SIZE + TILE_SIZE / 2,
             },
             targetId: target.id,
-            speed: 500, // Placeholder speed
+            speed: 500,
             damage: tower.currentDamage,
             blastRadius: tower.config.attack.data.blast_radius,
         };
@@ -174,48 +183,12 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
 
     initializeGameSession: () => {
         const configs = ConfigService.configs;
-        if (!configs) {
-            console.error('Cannot initialize game session: Configs are not loaded.');
-            return;
-        }
-        console.log('Initializing game session and creating managers...');
+        if (!configs) return;
         const waveManager = new WaveManager(configs, DUMMY_PATH);
         const enemyManager = new EnemyManager();
         const towerManager = new TowerManager();
         const projectileManager = new ProjectileManager();
-
-        // --- TEMPORARY TEST CODE ---
-        const turretConfig = configs.towerTypes['turret'];
-        if (turretConfig) {
-            const initialTower: TowerInstance = {
-                id: uuidv4(),
-                config: turretConfig,
-                tilePosition: { x: 7, y: 9 }, // A spot near the dummy path
-                cooldown: 0,
-                currentPersona: 'SOLDIER',
-                appliedUpgradeIds: [],
-                totalInvestment: turretConfig.cost,
-                currentDamage: turretConfig.attack?.data.damage ?? 0,
-                currentRange: turretConfig.attack?.data.range ?? 0,
-                currentFireRate: turretConfig.attack?.data.fire_rate ?? 0,
-            };
-            set({
-                waveManager,
-                enemyManager,
-                towerManager,
-                projectileManager,
-                appStatus: 'in-game',
-                towers: { [initialTower.id]: initialTower },
-            });
-        } else {
-            set({
-                waveManager,
-                enemyManager,
-                towerManager,
-                projectileManager,
-                appStatus: 'in-game',
-            });
-        }
+        set({ waveManager, enemyManager, towerManager, projectileManager, appStatus: 'in-game' });
     },
 
     update: (dt) => {
