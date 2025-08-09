@@ -2,7 +2,14 @@
 
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
-import type { GameState, AppStatus, EnemyInstance, TowerInstance, Vector2D } from '../types/game';
+import type {
+    GameState,
+    AppStatus,
+    EnemyInstance,
+    TowerInstance,
+    Vector2D,
+    WaveState,
+} from '../types/game';
 import type { EnemyTypeConfig } from '../types/configs';
 
 /**
@@ -15,7 +22,7 @@ interface GameActions {
     removeHealth: (amount: number) => void;
 
     // New actions for the Wave Manager
-    setWaveState: (waveState: Partial<GameState['waveState']>) => void;
+    setWaveState: (waveState: Partial<WaveState>) => void;
     spawnEnemy: (config: EnemyTypeConfig, path: Vector2D[]) => void;
 
     update: (dt: number) => void; // The main game loop update function
@@ -62,7 +69,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
      * Updates the state related to wave management.
      * @param waveState A partial object of the wave state to update.
      */
-    setWaveState: (waveState: Partial<GameState['waveState']>) => {
+    setWaveState: (waveState: Partial<WaveState>) => {
         set((state) => ({ waveState: { ...state.waveState, ...waveState } }));
     },
 

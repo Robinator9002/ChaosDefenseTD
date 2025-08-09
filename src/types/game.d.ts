@@ -24,7 +24,7 @@ export interface ActiveStatusEffect {
     potency: number;
     duration: number;
     timeRemaining: number;
-    sourceTowerId: string; // To prevent re-application from the same source if stacking is 'refresh'
+    sourceTowerId: string;
 }
 
 // =================================================================
@@ -33,28 +33,26 @@ export interface ActiveStatusEffect {
 
 /** Represents a single, live enemy on the game grid. */
 export interface EnemyInstance {
-    id: string; // A unique UUID for this specific instance
+    id: string;
     config: EnemyTypeConfig;
     position: Vector2D;
     currentHp: number;
     path: Vector2D[];
     pathIndex: number;
     effects: ActiveStatusEffect[];
-    // Calculated stats after scaling and effects
     currentSpeed: number;
     currentArmor: number;
 }
 
 /** Represents a single, live tower placed on the game grid. */
 export interface TowerInstance {
-    id: string; // A unique UUID for this specific instance
+    id: string;
     config: TowerTypeConfig;
-    tilePosition: Vector2D; // The {x, y} grid tile it's on
-    cooldown: number; // Time remaining until it can fire again
+    tilePosition: Vector2D;
+    cooldown: number;
     currentPersona: string;
     appliedUpgradeIds: string[];
-    totalInvestment: number; // For salvage calculations
-    // Calculated stats after upgrades
+    totalInvestment: number;
     currentDamage: number;
     currentRange: number;
     currentFireRate: number;
@@ -85,6 +83,14 @@ export type AppStatus =
     | 'game-over'
     | 'victory';
 
+/** Defines the state related to wave spawning and timing. */
+export interface WaveState {
+    waveInProgress: boolean;
+    timeToNextWave: number;
+    spawnQueue: string[]; // Array of enemy type IDs to spawn
+    spawnCooldown: number;
+}
+
 /** Defines the structure for the main Zustand store. */
 export interface GameState {
     appStatus: AppStatus;
@@ -95,11 +101,14 @@ export interface GameState {
     currentWave: number;
 
     // Live entities
-    enemies: Record<string, EnemyInstance>; // Use object for faster lookups
+    enemies: Record<string, EnemyInstance>;
     towers: Record<string, TowerInstance>;
     projectiles: Record<string, ProjectileInstance>;
 
     // UI State
-    selectedTowerForBuild: string | null; // The key from tower_types.json
-    selectedTowerInstanceId: string | null; // The UUID of a placed tower
+    selectedTowerForBuild: string | null;
+    selectedTowerInstanceId: string | null;
+
+    // Wave Management State
+    waveState: WaveState;
 }
