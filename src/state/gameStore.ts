@@ -26,23 +26,22 @@ const DUMMY_PATH: Vector2D[] = [
     { x: 20, y: 15 },
 ];
 
-// Initialize our logic managers
-// We can only do this after the ConfigService has been initialized.
-let waveManager: WaveManager | null = null;
-if (ConfigService.configs) {
-    waveManager = new WaveManager(ConfigService.configs, DUMMY_PATH);
-}
-
 export interface GameActions {
     setAppStatus: (status: AppStatus) => void;
     addGold: (amount: number) => void;
     removeHealth: (amount: number) => void;
     setWaveState: (waveState: Partial<WaveState>) => void;
     spawnEnemy: (config: EnemyTypeConfig, path: Vector2D[]) => void;
+    initializeGameSession: () => void; // New action to set up a game
     update: (dt: number) => void;
 }
 
-const initialState: GameState = {
+// Add manager instances to the GameState
+export interface GameStateWithManagers extends GameState {
+    waveManager: WaveManager | null;
+}
+
+const initialState: GameStateWithManagers = {
     appStatus: 'main-menu',
     gold: 200,
     health: 25,
@@ -58,9 +57,11 @@ const initialState: GameState = {
     projectiles: {},
     selectedTowerForBuild: null,
     selectedTowerInstanceId: null,
+    // Managers start as null
+    waveManager: null,
 };
 
-export const useGameStore = create<GameState & GameActions>((set, get) => ({
+export const useGameStore = create<GameStateWithManagers & GameActions>((set, get) => ({
     ...initialState,
 
     setAppStatus: (status: AppStatus) => set({ appStatus: status }),
@@ -86,21 +87,28 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
             enemies: { ...state.enemies, [newEnemy.id]: newEnemy },
         }));
     },
+
+    /**
+     * Sets up the logic managers for a new game session.
+     * This should ONLY be called after ConfigService is initialized.
+     */
+    initializeGameSession: () => {
+        if (!ConfigService.configs) {
+            console.error('Cannot initialize game session: Configs are not loaded.');
+            return;
+        }
+        console.log('Initializing game session and creating managers...');
+        const waveManager = new WaveManager(ConfigService.configs, DUMMY_PATH);
+        set({ waveManager: waveManager, appStatus: 'in-game' });
+    },
+
     update: (dt: number) => {
-        const { appStatus } = get();
+        const { appStatus, waveManager } = get();
         if (appStatus !== 'in-game') return;
 
-        // Ensure managers are initialized before running updates
-        if (!waveManager) {
-            if (ConfigService.configs) {
-                waveManager = new WaveManager(ConfigService.configs, DUMMY_PATH);
-            } else {
-                console.error('Configs not loaded, cannot update game logic.');
-                return;
-            }
+        // Delegate update logic to the responsible manager if it exists
+        if (waveManager) {
+            waveManager.update(get, set, dt);
         }
-
-        // Delegate update logic to the responsible manager
-        waveManager.update(get as StoreApi<GameState & GameActions>['getState'], set, dt);
     },
 }));
