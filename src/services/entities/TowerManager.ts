@@ -19,10 +19,14 @@ class TowerManager {
         const { towers, enemies } = get();
         const enemyList = Object.values(enemies);
 
-        for (const tower of Object.values(towers)) {
+        // Create a mutable copy of the towers state to apply changes to.
+        const updatedTowers: Record<string, TowerInstance> = { ...towers };
+        let hasChanges = false;
+
+        for (const tower of Object.values(updatedTowers)) {
             // 1. Update cooldown
-            let newCooldown = tower.cooldown - dt;
-            if (newCooldown < 0) newCooldown = 0;
+            const oldCooldown = tower.cooldown;
+            let newCooldown = Math.max(0, tower.cooldown - dt);
 
             // 2. If ready to fire, find a target
             if (newCooldown === 0 && tower.config.attack) {
@@ -34,11 +38,19 @@ class TowerManager {
                 }
             }
 
-            // 4. Update tower state in the store
-            // This is currently inefficient, we can optimize this later
-            // by batching updates.
+            // 4. If the cooldown changed, update the tower instance in our copy.
+            if (newCooldown !== oldCooldown) {
+                updatedTowers[tower.id] = { ...tower, cooldown: newCooldown };
+                hasChanges = true;
+            }
+        }
+
+        // 5. After the loop, if any towers were changed, update the store ONCE.
+        // This is the critical fix: we batch all updates for this manager
+        // into a single `set` call, preventing the infinite render loop.
+        if (hasChanges) {
             set((state) => ({
-                towers: { ...state.towers, [tower.id]: { ...tower, cooldown: newCooldown } },
+                towers: { ...state.towers, ...updatedTowers },
             }));
         }
     }
@@ -70,7 +82,7 @@ class TowerManager {
 
         // 2. Sort by targeting priority (simplified for now)
         // TODO: Implement sorting based on tower.currentPersona
-        enemiesInRange.sort((a, b) => a.pathIndex - b.pathIndex); // Simple "first" priority
+        enemiesInRange.sort((a, b) => b.pathIndex - a.pathIndex); // Target enemy furthest along path
 
         return enemiesInRange[0];
     }

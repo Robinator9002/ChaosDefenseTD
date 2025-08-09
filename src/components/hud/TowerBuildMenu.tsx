@@ -28,15 +28,19 @@ const TowerButton = ({ towerId, config }: { towerId: string; config: TowerTypeCo
             ? '!bg-chaos-accent !border-yellow-300 ring-2 ring-yellow-300 scale-110'
             : '';
 
+    // --- FIX: Defensively handle missing placeholder_color ---
+    // If a tower config (like a support tower) doesn't have a color,
+    // provide a sensible default instead of crashing.
+    const displayColor = config.placeholder_color
+        ? `rgb(${config.placeholder_color.join(',')})`
+        : `rgb(100, 100, 120)`; // A neutral default color
+
     return (
         <div
             className={`${baseClasses} ${colorClasses} ${selectedClasses}`}
             onClick={() => canAfford && setSelectedTowerForBuild(towerId)}
         >
-            <div
-                className="w-10 h-10 rounded"
-                style={{ backgroundColor: `rgb(${config.placeholder_color.join(',')})` }}
-            />
+            <div className="w-10 h-10 rounded" style={{ backgroundColor: displayColor }} />
             <span className="mt-1 text-xs font-bold text-chaos-text-primary truncate">
                 {config.name}
             </span>
@@ -59,9 +63,15 @@ export const TowerBuildMenu = () => {
 
     return (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 p-4 rounded-lg bg-chaos-primary/80 backdrop-blur-sm border border-chaos-highlight shadow-lg">
-            {Object.entries(towerTypes).map(([id, config]) => (
-                <TowerButton key={id} towerId={id} config={config} />
-            ))}
+            {Object.entries(towerTypes)
+                // Filter out any entries that are not valid tower configs (like JSON comments)
+                .filter(
+                    ([key, value]) =>
+                        typeof value === 'object' && value !== null && 'name' in value,
+                )
+                .map(([id, config]) => (
+                    <TowerButton key={id} towerId={id} config={config as TowerTypeConfig} />
+                ))}
         </div>
     );
 };
