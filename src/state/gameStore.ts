@@ -18,15 +18,17 @@ import TowerManager from '../services/entities/TowerManager';
 import ProjectileManager from '../services/entities/ProjectileManager';
 import ConfigService from '../services/ConfigService';
 
+// --- FIX: Path coordinates are now scaled by TILE_SIZE ---
+const TILE_SIZE = 32; // Assuming a default for now
 const DUMMY_PATH: Vector2D[] = [
-    { x: 0, y: 320 },
-    { x: 160, y: 320 },
-    { x: 160, y: 160 },
-    { x: 480, y: 160 },
-    { x: 480, y: 480 },
-    { x: 800, y: 480 },
-    { x: 800, y: 100 },
-    { x: 1280, y: 100 },
+    { x: 0 * TILE_SIZE, y: 10 * TILE_SIZE },
+    { x: 5 * TILE_SIZE, y: 10 * TILE_SIZE },
+    { x: 5 * TILE_SIZE, y: 5 * TILE_SIZE },
+    { x: 15 * TILE_SIZE, y: 5 * TILE_SIZE },
+    { x: 15 * TILE_SIZE, y: 15 * TILE_SIZE },
+    { x: 25 * TILE_SIZE, y: 15 * TILE_SIZE },
+    { x: 25 * TILE_SIZE, y: 3 * TILE_SIZE },
+    { x: 40 * TILE_SIZE, y: 3 * TILE_SIZE },
 ];
 
 export interface GameActions {
@@ -183,7 +185,6 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
         const projectileManager = new ProjectileManager();
 
         // --- TEMPORARY TEST CODE ---
-        // Pre-populate the game with one tower for immediate visual feedback.
         const turretConfig = configs.towerTypes['turret'];
         if (turretConfig) {
             const initialTower: TowerInstance = {
@@ -198,7 +199,6 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
                 currentRange: turretConfig.attack?.data.range ?? 0,
                 currentFireRate: turretConfig.attack?.data.fire_rate ?? 0,
             };
-            // Set the managers and the initial tower at the same time
             set({
                 waveManager,
                 enemyManager,
@@ -208,7 +208,6 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
                 towers: { [initialTower.id]: initialTower },
             });
         } else {
-            // Fallback if the turret config isn't found
             set({
                 waveManager,
                 enemyManager,
@@ -217,14 +216,12 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
                 appStatus: 'in-game',
             });
         }
-        // --- END TEMPORARY TEST CODE ---
     },
 
     update: (dt) => {
         const { appStatus, waveManager, enemyManager, towerManager, projectileManager } = get();
         if (appStatus !== 'in-game') return;
 
-        // Update managers in a logical order
         towerManager?.update(get, set, dt);
         projectileManager?.update(get, set, dt);
         enemyManager?.update(get, set, dt);
