@@ -1,7 +1,7 @@
 // src/state/gameStore.ts
 
 import { create } from 'zustand';
-import type { GameState, AppStatus } from '../types/game';
+import type { GameState, AppStatus, EnemyInstance, TowerInstance } from '../types/game';
 
 /**
  * Defines the actions that can be performed on the game state.
@@ -11,8 +11,7 @@ interface GameActions {
     setAppStatus: (status: AppStatus) => void;
     addGold: (amount: number) => void;
     removeHealth: (amount: number) => void;
-    // More complex actions for managing entities will be added later
-    // e.g., addEnemy, addTower, updateEnemyPosition, etc.
+    update: (dt: number) => void; // The main game loop update function
 }
 
 // Define the initial state of our game
@@ -33,7 +32,7 @@ const initialState: GameState = {
  * This hook will be our primary way of interacting with the game's state
  * from anywhere in the component tree.
  */
-export const useGameStore = create<GameState & GameActions>((set: any) => ({
+export const useGameStore = create<GameState & GameActions>((set, get) => ({
     ...initialState,
 
     // --- ACTIONS ---
@@ -48,12 +47,27 @@ export const useGameStore = create<GameState & GameActions>((set: any) => ({
      * Adds a specified amount of gold to the player's resources.
      * @param amount The amount of gold to add.
      */
-    addGold: (amount: number) => set((state: any) => ({ gold: state.gold + amount })),
+    addGold: (amount: number) => set((state) => ({ gold: state.gold + amount })),
 
     /**
      * Removes a specified amount of health from the player's base.
      * @param amount The amount of health to remove.
      */
     removeHealth: (amount: number) =>
-        set((state: any) => ({ health: Math.max(0, state.health - amount) })),
+        set((state) => ({ health: Math.max(0, state.health - amount) })),
+
+    /**
+     * The main update function, called by the GameLoop on every frame.
+     * It orchestrates all the game logic updates.
+     * @param dt Delta time - the time elapsed since the last frame in seconds.
+     */
+    update: (dt: number) => {
+        // This is where we will orchestrate all our logic hooks in the future.
+        // For now, it's a placeholder.
+        // Example of future logic:
+        // const { enemies, towers } = get();
+        // const updatedEnemies = updateEnemyPositions(enemies, dt);
+        // const updatedTowers = updateTowerCooldowns(towers, dt);
+        // set({ enemies: updatedEnemies, towers: updatedTowers });
+    },
 }));
