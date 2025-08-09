@@ -1,4 +1,4 @@
-// src/services/EnemyManager.ts
+// src/services/entities/EnemyManager.ts
 
 import type { GameState, Vector2D, EnemyInstance } from '../../types/game';
 import type { StoreApi } from 'zustand';

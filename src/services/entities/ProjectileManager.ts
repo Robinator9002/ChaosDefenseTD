@@ -1,4 +1,4 @@
-// src/services/ProjectileManager.ts
+// src/services/entities/ProjectileManager.ts
 
 import type { GameState, Vector2D } from '../../types/game';
 import type { StoreApi } from 'zustand';

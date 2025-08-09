@@ -1,4 +1,4 @@
-// src/services/TowerManager.ts
+// src/services/entities/TowerManager.ts
 
 import type { GameState, TowerInstance, EnemyInstance } from '../../types/game';
 import type { StoreApi } from 'zustand';
