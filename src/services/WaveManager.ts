@@ -1,7 +1,8 @@
 // src/services/WaveManager.ts
 
 import type { GameState, Vector2D } from '../types/game';
-import type { AllConfigs } from './ConfigService';
+// FIX: Correctly import AllConfigs from its definitive source: ../types/configs
+import type { AllConfigs } from '../types/configs';
 import type { StoreApi } from 'zustand';
 import type { GameActions } from '../state/gameStore';
 
@@ -13,7 +14,8 @@ type GameStore = GameState & GameActions;
  * actions back to the store.
  */
 class WaveManager {
-    private configs: AllConfigs;
+    // Declare configs as potentially null, matching ConfigService's public property
+    private configs: AllConfigs | null;
     private mainPath: Vector2D[];
 
     constructor(configs: AllConfigs, mainPath: Vector2D[]) {
@@ -29,12 +31,20 @@ class WaveManager {
         set: StoreApi<GameStore>['setState'],
         dt: number,
     ): void {
+        // Add a runtime type guard to ensure 'configs' is not null
+        if (!this.configs) {
+            console.error('WaveManager: Configuration not initialized. Skipping update.');
+            return;
+        }
+        // TypeScript now knows 'currentConfigs' is definitely AllConfigs
+        const currentConfigs: AllConfigs = this.configs;
+
         const { waveState } = get();
 
         if (waveState.waveInProgress) {
-            this.handleSpawning(get, set, dt);
+            this.handleSpawning(get, set, dt, currentConfigs);
         } else {
-            this.handleWaveCountdown(get, set, dt);
+            this.handleWaveCountdown(get, set, dt, currentConfigs);
         }
     }
 
@@ -42,16 +52,17 @@ class WaveManager {
         get: StoreApi<GameStore>['getState'],
         set: StoreApi<GameStore>['setState'],
         dt: number,
+        configs: AllConfigs, // Receive configs as a non-nullable parameter
     ): void {
         const { timeToNextWave } = get().waveState;
         const newTimeToNextWave = timeToNextWave - dt;
 
+        set((state) => ({
+            waveState: { ...state.waveState, timeToNextWave: newTimeToNextWave },
+        }));
+
         if (newTimeToNextWave <= 0) {
-            this.startNextWave(get, set);
-        } else {
-            set((state) => ({
-                waveState: { ...state.waveState, timeToNextWave: newTimeToNextWave },
-            }));
+            this.startNextWave(get, set, configs);
         }
     }
 
@@ -59,15 +70,18 @@ class WaveManager {
         get: StoreApi<GameStore>['getState'],
         set: StoreApi<GameStore>['setState'],
         dt: number,
+        configs: AllConfigs, // Receive configs as a non-nullable parameter
     ): void {
         const { spawnQueue, spawnCooldown } = get().waveState;
+        const currentWave = get().currentWave;
+        const levelDifficulty = configs.gameSettings.difficulty;
 
         if (spawnQueue.length === 0) {
             if (Object.keys(get().enemies).length === 0) {
-                console.log(`Wave ${get().currentWave} complete!`);
-                const difficulty = String(this.configs.gameSettings.difficulty);
+                console.log(`Wave ${currentWave} complete!`);
+                const difficultyKey = String(configs.gameSettings.difficulty);
                 const timeBetweenWaves =
-                    this.configs.difficultyScaling[difficulty].time_between_waves;
+                    configs.difficultyScaling[difficultyKey]?.time_between_waves || 0;
 
                 set((state) => ({
                     waveState: {
@@ -83,37 +97,47 @@ class WaveManager {
         const newSpawnCooldown = spawnCooldown - dt;
         if (newSpawnCooldown <= 0) {
             const enemyIdToSpawn = spawnQueue[0];
-            const enemyConfig = this.configs.enemyTypes[enemyIdToSpawn];
+            const enemyConfig = configs.enemyTypes[enemyIdToSpawn];
 
             if (enemyConfig) {
                 get().spawnEnemy(enemyConfig, this.mainPath);
             }
 
-            const { waveScaling } = this.configs;
-            const nextCooldown = waveScaling.spawn_cooldown.base_seconds;
+            const { waveScaling } = configs;
+
+            const calculatedSpawnCooldown = Math.max(
+                waveScaling.spawn_cooldown.minimum_seconds,
+                waveScaling.spawn_cooldown.base_seconds -
+                    waveScaling.spawn_cooldown.reduction_per_wave * currentWave -
+                    waveScaling.spawn_cooldown.reduction_per_level_difficulty * levelDifficulty,
+            );
+
             set((state) => ({
                 waveState: {
                     ...state.waveState,
                     spawnQueue: state.waveState.spawnQueue.slice(1),
-                    spawnCooldown: nextCooldown,
+                    spawnCooldown: calculatedSpawnCooldown,
                 },
             }));
         } else {
-            set((state) => ({
-                waveState: { ...state.waveState, spawnCooldown: newSpawnCooldown },
-            }));
+            if (newSpawnCooldown !== spawnCooldown) {
+                set((state) => ({
+                    waveState: { ...state.waveState, spawnCooldown: newSpawnCooldown },
+                }));
+            }
         }
     }
 
     private startNextWave(
         get: StoreApi<GameStore>['getState'],
         set: StoreApi<GameStore>['setState'],
+        configs: AllConfigs, // Receive configs as a non-nullable parameter
     ): void {
         const newWaveNumber = get().currentWave + 1;
         console.log(`Starting Wave ${newWaveNumber}`);
 
-        const { waveScaling, enemyTypes } = this.configs;
-        const levelDifficulty = 1;
+        const { waveScaling, enemyTypes } = configs;
+        const levelDifficulty = configs.gameSettings.difficulty;
 
         const enemyCount = Math.floor(
             waveScaling.enemy_count.base +

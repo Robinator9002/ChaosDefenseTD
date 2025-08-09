@@ -7,23 +7,11 @@ import type {
     GlobalUpgrade,
     LevelStyleConfig,
     TargetingPersona,
+    AllConfigs,
+    WaveScalingConfig,
+    DifficultyScalingConfig,
     TowerUpgradeFile,
 } from '../types/configs';
-
-/**
- * Defines the final, structured shape of all loaded configuration data.
- */
-export interface AllConfigs {
-    towerTypes: Record<string, TowerTypeConfig>;
-    towerUpgrades: Record<string, TowerUpgradeFile>;
-    enemyTypes: Record<string, EnemyTypeConfig>;
-    gameSettings: GameSettings;
-    globalUpgrades: Record<string, GlobalUpgrade>;
-    levelStyles: Record<string, LevelStyleConfig>;
-    targetingAi: Record<string, TargetingPersona>;
-    // Add other config types as needed, e.g., formations, status_effects
-    [key: string]: unknown;
-}
 
 /**
  * A singleton service responsible for loading, processing, and providing
@@ -48,57 +36,148 @@ class ConfigService {
      * This must be called once at application startup.
      */
     public async initialize(): Promise<void> {
-        if (this.isInitialized) {
-            console.warn('ConfigService is already initialized.');
+        if (this.isInitialized && this.configs) {
+            console.log('ConfigService already initialized.');
             return;
         }
 
-        console.log('Initializing ConfigService...');
+        console.log('ConfigService: Starting initialization process...');
 
-        // Use Vite's import.meta.glob to dynamically import all JSON files
-        const configModules = import.meta.glob('../configs/**/*.json');
-        const towerUpgradeModules = import.meta.glob('../configs/upgrades/towers/*.json');
-
-        const loadedConfigs: Partial<AllConfigs> = {};
+        const loadedConfigs: AllConfigs = {
+            towerTypes: {},
+            towerUpgrades: {},
+            enemyTypes: {},
+            gameSettings: {} as GameSettings,
+            globalUpgrades: {},
+            levelStyles: {},
+            targetingAi: {},
+            difficultyScaling: {},
+            waveScaling: {} as WaveScalingConfig,
+            statusEffects: {},
+            formations: {},
+        };
         const loadedTowerUpgrades: Record<string, TowerUpgradeFile> = {};
 
-        // Process main config files
-        for (const path in configModules) {
-            // Exclude tower upgrades, as they are handled separately
-            if (path.includes('/upgrades/towers/')) continue;
+        // Use dynamic imports to load all JSON configuration files
+        // FIX: Change glob pattern to be recursive (**) to find files in subdirectories
+        const mainConfigModules = import.meta.glob('../configs/**/*.json', { eager: false });
+        const towerUpgradeModules = import.meta.glob('../configs/upgrades/*.json', {
+            eager: false,
+        });
 
-            const module = (await configModules[path]()) as { default: unknown };
-            // Extract a key from the file path (e.g., '../configs/tower_types.json' -> 'towerTypes')
-            const key = this.getKeyFromPath(path);
-            if (key) {
-                loadedConfigs[key as keyof AllConfigs] = module.default;
+        console.log('ConfigService: Found main config modules:', Object.keys(mainConfigModules));
+        console.log(
+            'ConfigService: Found tower upgrade modules:',
+            Object.keys(towerUpgradeModules),
+        );
+
+        // Process main config files
+        for (const path in mainConfigModules) {
+            try {
+                console.log(`ConfigService: Loading main config from path: ${path}`);
+                const module = (await mainConfigModules[path]()) as { default: unknown };
+                const key = this.getKeyFromPath(path);
+
+                if (key) {
+                    console.log(`ConfigService: Processing key '${key}' from file '${path}'`);
+                    console.log(`ConfigService: Data loaded for '${key}':`, module.default);
+
+                    switch (key) {
+                        case 'gameSettings':
+                            loadedConfigs.gameSettings = module.default as GameSettings;
+                            break;
+                        case 'towerTypes':
+                            loadedConfigs.towerTypes = module.default as Record<
+                                string,
+                                TowerTypeConfig
+                            >;
+                            break;
+                        case 'enemyTypes':
+                            loadedConfigs.enemyTypes = module.default as Record<
+                                string,
+                                EnemyTypeConfig
+                            >;
+                            break;
+                        case 'waveScaling':
+                            loadedConfigs.waveScaling = module.default as WaveScalingConfig;
+                            break;
+                        case 'difficultyScaling':
+                            loadedConfigs.difficultyScaling =
+                                module.default as DifficultyScalingConfig;
+                            break;
+                        case 'globalUpgrades': // If global_upgrades.json ends up here as well via recursive glob
+                            loadedConfigs.globalUpgrades = module.default as Record<
+                                string,
+                                GlobalUpgrade
+                            >;
+                            break;
+                        case 'levelStyles':
+                            loadedConfigs.levelStyles = module.default as Record<
+                                string,
+                                LevelStyleConfig
+                            >;
+                            break;
+                        case 'targetingAi':
+                            loadedConfigs.targetingAi = module.default as Record<
+                                string,
+                                TargetingPersona
+                            >;
+                            break;
+                        // Add more cases for other specific top-level configs if needed
+                        default:
+                            (loadedConfigs as any)[key] = module.default;
+                            break;
+                    }
+                } else {
+                    console.warn(`ConfigService: Could not determine key for path: ${path}`);
+                }
+            } catch (error) {
+                console.error(
+                    `ConfigService: Failed to load or process main config from ${path}:`,
+                    error,
+                );
             }
         }
 
-        // Process and merge individual tower upgrade files
+        // Process tower upgrade files (ensure this doesn't double-load if main glob becomes too broad)
+        // It's safer to keep it separate as 'upgrades' are usually a distinct category.
         for (const path in towerUpgradeModules) {
-            const module = (await towerUpgradeModules[path]()) as { default: TowerUpgradeFile };
-            // Extract tower ID from filename (e.g., 'mortar.json' -> 'mortar')
-            const towerId = path.split('/').pop()?.replace('.json', '');
-            if (towerId) {
-                loadedTowerUpgrades[towerId] = module.default;
+            try {
+                console.log(`ConfigService: Loading tower upgrade from path: ${path}`);
+                const module = (await towerUpgradeModules[path]()) as { default: TowerUpgradeFile };
+                const towerId = path.split('/').pop()?.replace('.json', '');
+                if (towerId) {
+                    loadedTowerUpgrades[towerId] = module.default;
+                    console.log(
+                        `ConfigService: Loaded upgrade for tower '${towerId}':`,
+                        module.default,
+                    );
+                } else {
+                    console.warn(
+                        `ConfigService: Could not determine tower ID for upgrade path: ${path}`,
+                    );
+                }
+            } catch (error) {
+                console.error(
+                    `ConfigService: Failed to load or process tower upgrade from ${path}:`,
+                    error,
+                );
             }
         }
         loadedConfigs.towerUpgrades = loadedTowerUpgrades;
 
-        this.configs = loadedConfigs as AllConfigs;
+        this.configs = loadedConfigs;
         this.isInitialized = true;
-        console.log('ConfigService initialized successfully with:', this.configs);
+        console.log('ConfigService: Initialization complete!');
+        console.log(
+            'ConfigService: Final loaded configurations:',
+            JSON.stringify(this.configs, null, 2),
+        );
     }
 
-    /**
-     * A helper to convert a file path into a camelCase key for the configs object.
-     * e.g., '../configs/game_settings.json' becomes 'gameSettings'
-     */
     private getKeyFromPath(path: string): string {
         const fileName = path.split('/').pop()?.replace('.json', '');
         if (!fileName) return '';
-        // Convert snake_case to camelCase
         return fileName.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
     }
 }

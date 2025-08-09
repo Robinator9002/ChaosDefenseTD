@@ -223,6 +223,8 @@ export interface AllConfigs {
     targetingAi: Record<string, TargetingPersona>;
     difficultyScaling: DifficultyScalingConfig;
     waveScaling: WaveScalingConfig;
-    statusEffects: Record<string, unknown>; // Define more strictly if needed
-    formations: Record<string, unknown>; // Define more strictly if needed
+    statusEffects: Record<string, unknown>; // Keep these if their structure isn't fully defined yet
+    formations: Record<string, unknown>; // Keep these if their structure isn't fully defined yet
+    // *** IMPORTANT: The problematic '[key: string]: unknown;' line has been removed from here. ***
+    // This allows TypeScript to precisely infer the types of the explicitly defined properties.
 }
