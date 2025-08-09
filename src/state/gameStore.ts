@@ -1,7 +1,9 @@
 // src/state/gameStore.ts
 
 import { create } from 'zustand';
-import type { GameState, AppStatus, EnemyInstance, TowerInstance } from '../types/game';
+import { v4 as uuidv4 } from 'uuid';
+import type { GameState, AppStatus, EnemyInstance, TowerInstance, Vector2D } from '../types/game';
+import type { EnemyTypeConfig } from '../types/configs';
 
 /**
  * Defines the actions that can be performed on the game state.
@@ -11,15 +13,29 @@ interface GameActions {
     setAppStatus: (status: AppStatus) => void;
     addGold: (amount: number) => void;
     removeHealth: (amount: number) => void;
+
+    // New actions for the Wave Manager
+    setWaveState: (waveState: Partial<GameState['waveState']>) => void;
+    spawnEnemy: (config: EnemyTypeConfig, path: Vector2D[]) => void;
+
     update: (dt: number) => void; // The main game loop update function
 }
 
 // Define the initial state of our game
 const initialState: GameState = {
     appStatus: 'main-menu',
-    gold: 200, // A sensible starting value, can be overridden by level configs
-    health: 25, // Same as above
+    gold: 200,
+    health: 25,
     currentWave: 0,
+
+    // New state for managing waves
+    waveState: {
+        waveInProgress: false,
+        timeToNextWave: 10, // Initial delay before first wave
+        spawnQueue: [],
+        spawnCooldown: 0,
+    },
+
     enemies: {},
     towers: {},
     projectiles: {},
@@ -37,24 +53,42 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
     // --- ACTIONS ---
 
-    /**
-     * Sets the overall status of the application (e.g., in menu, in game).
-     * @param status The new application status.
-     */
     setAppStatus: (status: AppStatus) => set({ appStatus: status }),
-
-    /**
-     * Adds a specified amount of gold to the player's resources.
-     * @param amount The amount of gold to add.
-     */
     addGold: (amount: number) => set((state) => ({ gold: state.gold + amount })),
-
-    /**
-     * Removes a specified amount of health from the player's base.
-     * @param amount The amount of health to remove.
-     */
     removeHealth: (amount: number) =>
         set((state) => ({ health: Math.max(0, state.health - amount) })),
+
+    /**
+     * Updates the state related to wave management.
+     * @param waveState A partial object of the wave state to update.
+     */
+    setWaveState: (waveState: Partial<GameState['waveState']>) => {
+        set((state) => ({ waveState: { ...state.waveState, ...waveState } }));
+    },
+
+    /**
+     * Creates a new EnemyInstance and adds it to the game state.
+     * @param config The static configuration for the enemy type.
+     * @param path The array of Vector2D points the enemy will follow.
+     */
+    spawnEnemy: (config: EnemyTypeConfig, path: Vector2D[]) => {
+        const newEnemy: EnemyInstance = {
+            id: uuidv4(),
+            config,
+            path,
+            position: { ...path[0] }, // Start at the beginning of the path
+            currentHp: config.base_stats.hp,
+            pathIndex: 0,
+            effects: [],
+            // Base stats are copied, will be modified by scaling/effects later
+            currentSpeed: config.base_stats.speed,
+            currentArmor: config.base_stats.armor,
+        };
+
+        set((state) => ({
+            enemies: { ...state.enemies, [newEnemy.id]: newEnemy },
+        }));
+    },
 
     /**
      * The main update function, called by the GameLoop on every frame.
@@ -62,12 +96,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
      * @param dt Delta time - the time elapsed since the last frame in seconds.
      */
     update: (dt: number) => {
-        // This is where we will orchestrate all our logic hooks in the future.
-        // For now, it's a placeholder.
-        // Example of future logic:
-        // const { enemies, towers } = get();
-        // const updatedEnemies = updateEnemyPositions(enemies, dt);
-        // const updatedTowers = updateTowerCooldowns(towers, dt);
-        // set({ enemies: updatedEnemies, towers: updatedTowers });
+        // In the next steps, this function will call the update logic from
+        // our manager services, like:
+        // waveManager.update(get, set, dt);
+        // enemyManager.update(get, set, dt);
+        // towerManager.update(get, set, dt);
     },
 }));
