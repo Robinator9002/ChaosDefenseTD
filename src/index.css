@@ -1,2 +1,26 @@
-@import "tailwindcss";
+/* Import the core Tailwind CSS functionality */
+@import 'tailwindcss';
 
+/* Define all custom theme tokens using the @theme directive.
+  This is the modern, Vite-integrated way to configure Tailwind.
+  These are compiled into CSS variables like var(--color-chaos-primary).
+*/
+@theme {
+    --color-chaos-primary: #1a1a2e;
+    --color-chaos-secondary: #16213e;
+    --color-chaos-accent: #e94560;
+    --color-chaos-highlight: #0f3460;
+    --color-chaos-text-primary: #dcdcdc;
+    --color-chaos-text-secondary: #a0a0a0;
+    --color-chaos-text-disabled: #606060;
+}
+
+/* Define global base styles for the application.
+  Here we apply our custom theme variables to the body.
+*/
+body {
+    @apply bg-chaos-primary text-chaos-text-primary;
+    font-family: 'Inter', sans-serif; /* A good default sans-serif font */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
