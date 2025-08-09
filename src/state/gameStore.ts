@@ -1,6 +1,6 @@
 // src/state/gameStore.ts
 
-import { create, type StoreApi } from 'zustand';
+import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import type {
     GameState,
@@ -146,9 +146,13 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
 
     spawnProjectile: (tower, target) => {
         if (!tower.config.attack) return;
+        const TILE_SIZE = ConfigService.configs?.gameSettings.tile_size ?? 32;
         const newProjectile: ProjectileInstance = {
             id: uuidv4(),
-            position: { x: tower.tilePosition.x * 32 + 16, y: tower.tilePosition.y * 32 + 16 },
+            position: {
+                x: tower.tilePosition.x * TILE_SIZE + TILE_SIZE / 2,
+                y: tower.tilePosition.y * TILE_SIZE + TILE_SIZE / 2,
+            },
             targetId: target.id,
             speed: 500, // Placeholder speed
             damage: tower.currentDamage,
@@ -167,12 +171,53 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
         }),
 
     initializeGameSession: () => {
-        if (!ConfigService.configs) return;
-        const waveManager = new WaveManager(ConfigService.configs, DUMMY_PATH);
+        const configs = ConfigService.configs;
+        if (!configs) {
+            console.error('Cannot initialize game session: Configs are not loaded.');
+            return;
+        }
+        console.log('Initializing game session and creating managers...');
+        const waveManager = new WaveManager(configs, DUMMY_PATH);
         const enemyManager = new EnemyManager();
         const towerManager = new TowerManager();
         const projectileManager = new ProjectileManager();
-        set({ waveManager, enemyManager, towerManager, projectileManager, appStatus: 'in-game' });
+
+        // --- TEMPORARY TEST CODE ---
+        // Pre-populate the game with one tower for immediate visual feedback.
+        const turretConfig = configs.towerTypes['turret'];
+        if (turretConfig) {
+            const initialTower: TowerInstance = {
+                id: uuidv4(),
+                config: turretConfig,
+                tilePosition: { x: 7, y: 9 }, // A spot near the dummy path
+                cooldown: 0,
+                currentPersona: 'SOLDIER',
+                appliedUpgradeIds: [],
+                totalInvestment: turretConfig.cost,
+                currentDamage: turretConfig.attack?.data.damage ?? 0,
+                currentRange: turretConfig.attack?.data.range ?? 0,
+                currentFireRate: turretConfig.attack?.data.fire_rate ?? 0,
+            };
+            // Set the managers and the initial tower at the same time
+            set({
+                waveManager,
+                enemyManager,
+                towerManager,
+                projectileManager,
+                appStatus: 'in-game',
+                towers: { [initialTower.id]: initialTower },
+            });
+        } else {
+            // Fallback if the turret config isn't found
+            set({
+                waveManager,
+                enemyManager,
+                towerManager,
+                projectileManager,
+                appStatus: 'in-game',
+            });
+        }
+        // --- END TEMPORARY TEST CODE ---
     },
 
     update: (dt) => {
