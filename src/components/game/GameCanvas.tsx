@@ -211,7 +211,6 @@ export const GameCanvas = () => {
     // will only re-render if `selectedTowerForBuild` or `gold` changes, which
     // is important for updating the placement preview and affordability checks.
     const selectedTowerForBuild = useGameStore((state) => state.selectedTowerForBuild);
-    const gold = useGameStore((state) => state.gold);
 
     // --- Input Handlers ---
 
