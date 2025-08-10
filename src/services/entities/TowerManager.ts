@@ -3,7 +3,7 @@
 import type { GameState, TowerInstance, EnemyInstance, Vector2D } from '../../types/game';
 import type { StoreApi } from 'zustand';
 import type { GameActions } from '../../state/gameStore';
-import AttackHandler from '../attacks/AttackHandler'; // Import the AttackHandler
+import AttackHandler from '../attacks/AttackHandler';
 
 type GameStore = GameState & GameActions;
 
@@ -32,23 +32,24 @@ class TowerManager {
                 towerDidChange = true;
             }
 
-            // If ready to fire, find a target and execute the attack.
-            if (newCooldown === 0 && (tower.config.attack || tower.config.auras)) {
+            // A tower can only act if its cooldown is 0 AND it has an attack configuration.
+            // Support-only towers will correctly be skipped here.
+            if (newCooldown === 0 && tower.config.attack) {
                 const target = this.findTarget(tower, enemyList);
 
                 if (target) {
-                    // --- REFACTOR START ---
-                    // 1. Calculate the tower's final stats, including buffs from nearby support towers.
                     const buffedTower = this.applySupportBuffs(tower, supportTowers);
-
-                    // 2. Delegate the attack to the AttackHandler.
-                    // The handler will determine the attack type (projectile, aura, etc.)
                     AttackHandler.executeAttack(buffedTower, target);
 
-                    // 3. Reset cooldown based on the *buffed* fire rate.
-                    newCooldown = 1 / buffedTower.currentFireRate;
+                    // FIX: Safely calculate the new cooldown, preventing division by zero.
+                    const fireRate = buffedTower.currentFireRate;
+                    if (fireRate > 0) {
+                        newCooldown = 1 / fireRate;
+                    } else {
+                        // For single-shot abilities or auras with no fire rate, provide a default.
+                        newCooldown = 1.0;
+                    }
                     towerDidChange = true;
-                    // --- REFACTOR END ---
                 }
             }
 
@@ -65,32 +66,19 @@ class TowerManager {
         }
     }
 
-    /**
-     * Calculates a tower's final stats for an attack after applying buffs
-     * from all nearby friendly support towers.
-     * @param towerToBuff - The tower that is about to attack.
-     * @param allSupportTowers - A list of all support towers on the map.
-     * @returns A new TowerInstance object with temporary, buffed stats.
-     */
     private applySupportBuffs(
         towerToBuff: TowerInstance,
         allSupportTowers: TowerInstance[],
     ): TowerInstance {
-        // Start with a clone of the tower's current state.
         const buffedTower = { ...towerToBuff };
 
         for (const supportTower of allSupportTowers) {
-            // A tower cannot buff itself.
             if (supportTower.id === towerToBuff.id) continue;
 
             const distance = this.getDistance(towerToBuff.tilePosition, supportTower.tilePosition);
 
-            // Check each aura on the support tower.
             supportTower.config.auras?.forEach((aura) => {
-                // Is the attacking tower in range of this support aura?
                 if (distance * 32 <= aura.range) {
-                    // Multiply by tile size for world units
-                    // Apply each effect from the aura.
                     for (const effectKey in aura.effects) {
                         const effect = aura.effects[effectKey];
                         switch (effectKey) {
@@ -103,20 +91,21 @@ class TowerManager {
                             case 'range_boost':
                                 buffedTower.currentRange *= effect.potency;
                                 break;
-                            // Add cases for other potential buffs like effect_potency_boost
                         }
                     }
                 }
             });
         }
-
         return buffedTower;
     }
 
     /**
      * Finds a valid target for a given tower from a list of enemies.
+     * This is a pure utility function; it does not decide IF a tower can attack.
      */
     private findTarget(tower: TowerInstance, enemies: EnemyInstance[]): EnemyInstance | null {
+        // FIX: Removed the '!tower.config.attack' check. This function's only job
+        // is to find an enemy in range, not to validate the tower's ability to attack.
         if (enemies.length === 0) {
             return null;
         }
@@ -137,15 +126,10 @@ class TowerManager {
             return null;
         }
 
-        // TODO: Implement sorting based on tower.currentPersona
         enemiesInRange.sort((a, b) => b.pathIndex - a.pathIndex);
-
         return enemiesInRange[0];
     }
 
-    /**
-     * Calculates the tile-based distance between two vectors.
-     */
     private getDistance(a: Vector2D, b: Vector2D): number {
         const dx = a.x - b.x;
         const dy = a.y - b.y;
