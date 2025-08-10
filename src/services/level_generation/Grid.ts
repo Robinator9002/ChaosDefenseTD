@@ -1,6 +1,6 @@
 // src/services/level_generation/Grid.ts
 
-import type { TileType } from '../../types/configs'; // Assuming TileType is defined here
+import type { TileType } from '../../types/configs';
 
 /**
  * Represents a single tile on the game grid.
@@ -9,14 +9,13 @@ import type { TileType } from '../../types/configs'; // Assuming TileType is def
 export interface Tile {
     x: number;
     y: number;
-    tileType: TileType; // e.g., 'path', 'buildable', 'obstacle'
+    tileType: TileType; // e.g., 'PATH', 'BUILDABLE', 'MOUNTAIN'
 }
 
 /**
  * Represents the entire game map as a 2D grid of Tile objects.
  * This class manages the logical structure of the level, providing methods
- * to access and modify tiles. It knows nothing about rendering, pathfinding,
- * or game rules; it is simply a container for the level's layout.
+ * to access and modify tiles. It is simply a container for the level's layout.
  */
 export class Grid {
     public width: number;
@@ -36,9 +35,10 @@ export class Grid {
     }
 
     /**
-     * Fills the grid with default Tile objects, typically 'buildable'.
+     * Fills the grid with default Tile objects.
+     * FIX: The default tile type is now 'BUILDABLE' (uppercase) to match the TileType definition.
      */
-    private initializeGrid(defaultTileType: TileType = 'buildable'): void {
+    private initializeGrid(defaultTileType: TileType = 'BUILDABLE'): void {
         this._grid = Array(this.height)
             .fill(null)
             .map((_, y) =>
@@ -79,19 +79,22 @@ export class Grid {
 
     /**
      * Returns the raw 2D array of tile types (for drawing or pathfinding input).
-     * This converts the Tile objects into a simpler numerical representation
-     * as expected by some external logic (like pathfinding).
+     * This converts the Tile objects into a simpler numerical representation.
      */
     public getGridData(): number[][] {
-        // Map TileType strings to numbers for a simple grid representation
+        // FIX: This map now correctly uses the uppercase TileType values.
+        // The generic 'obstacle' has been removed in favor of specific feature types.
         const typeMap: Record<TileType, number> = {
             empty: 0,
-            buildable: 1,
-            path: 2,
-            obstacle: 3, // For features like MOUNTAIN, LAKE, TREE
+            BUILDABLE: 1,
+            PATH: 2,
+            MOUNTAIN: 3,
+            LAKE: 3,
+            TREE: 3,
+            BORDER: 3,
+            BASE_ZONE: 3,
             spawn: 4,
             end: 5,
-            // Add more as needed, ensure consistency with LevelDataConfig.grid
         };
 
         return this._grid.map(
