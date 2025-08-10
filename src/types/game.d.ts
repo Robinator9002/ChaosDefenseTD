@@ -1,7 +1,7 @@
 // src/types/game.d.ts
 
 import type { EnemyTypeConfig, TowerTypeConfig } from './configs';
-import type { Grid } from '../services/level_generation/Grid'; // Import the Grid class type
+import type { Grid } from '../services/level_generation/Grid';
 
 /**
  * This file contains TypeScript interfaces for the dynamic, in-game state.
@@ -17,6 +17,15 @@ import type { Grid } from '../services/level_generation/Grid'; // Import the Gri
 export interface Vector2D {
     x: number;
     y: number;
+}
+
+/**
+ * NEW: Represents the state of the game camera, including its
+ * position (offset) and magnification (zoom).
+ */
+export interface CameraState {
+    offset: Vector2D;
+    zoom: number;
 }
 
 /** Represents an active status effect on an entity. */
@@ -113,8 +122,11 @@ export interface GameState {
     // Wave Management State
     waveState: WaveState;
 
-    // --- NEW: Level Data ---
+    // Level Data
     grid: Grid | null;
     paths: Vector2D[][] | null;
     levelStyle: string | null;
+
+    // --- NEW: Camera State ---
+    camera: CameraState;
 }
