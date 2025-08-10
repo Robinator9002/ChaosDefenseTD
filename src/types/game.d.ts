@@ -1,6 +1,6 @@
 // src/types/game.d.ts
 
-import type { EnemyTypeConfig, TowerTypeConfig } from './configs';
+import type { EnemyTypeConfig, TowerTypeConfig, StatusEffectValue } from './configs';
 import type { Grid } from '../services/level_generation/Grid';
 
 /**
@@ -13,22 +13,16 @@ import type { Grid } from '../services/level_generation/Grid';
 // Core & Utility Types
 // =================================================================
 
-/** A simple 2D vector for positions and velocities. */
 export interface Vector2D {
     x: number;
     y: number;
 }
 
-/**
- * NEW: Represents the state of the game camera, including its
- * position (offset) and magnification (zoom).
- */
 export interface CameraState {
     offset: Vector2D;
     zoom: number;
 }
 
-/** Represents an active status effect on an entity. */
 export interface ActiveStatusEffect {
     id: string;
     potency: number;
@@ -41,7 +35,6 @@ export interface ActiveStatusEffect {
 // Entity Instance Types
 // =================================================================
 
-/** Represents a single, live enemy on the game grid. */
 export interface EnemyInstance {
     id: string;
     config: EnemyTypeConfig;
@@ -54,7 +47,6 @@ export interface EnemyInstance {
     currentArmor: number;
 }
 
-/** Represents a single, live tower placed on the game grid. */
 export interface TowerInstance {
     id: string;
     config: TowerTypeConfig;
@@ -68,7 +60,10 @@ export interface TowerInstance {
     currentFireRate: number;
 }
 
-/** Represents a single projectile in flight. */
+/**
+ * Represents a single projectile in flight.
+ * ENHANCED: Now supports piercing and chaining mechanics.
+ */
 export interface ProjectileInstance {
     id: string;
     position: Vector2D;
@@ -77,13 +72,30 @@ export interface ProjectileInstance {
     damage: number;
     blastRadius?: number;
     effectsToApply?: StatusEffectValue[];
+    // --- NEW: Advanced projectile properties ---
+    pierce?: number; // How many enemies it can pass through
+    chains?: number; // How many times it can jump to a new target
+    hitEnemyIds: string[]; // Tracks which enemies have already been hit by this projectile
+}
+
+/**
+ * NEW: Represents a persistent area on the ground, like a firewall.
+ */
+export interface AuraInstance {
+    id: string;
+    sourceTowerId: string;
+    position: Vector2D;
+    radius: number;
+    duration: number;
+    timeRemaining: number;
+    effects: Record<string, StatusEffectValue>; // Effects applied to enemies inside
+    dps: number; // Direct damage per second
 }
 
 // =================================================================
 // Game State & Store
 // =================================================================
 
-/** Defines the possible states of the overall application. */
 export type AppStatus =
     | 'main-menu'
     | 'workshop'
@@ -93,19 +105,15 @@ export type AppStatus =
     | 'game-over'
     | 'victory';
 
-/** Defines the state related to wave spawning and timing. */
 export interface WaveState {
     waveInProgress: boolean;
     timeToNextWave: number;
-    spawnQueue: string[]; // Array of enemy type IDs to spawn
+    spawnQueue: string[];
     spawnCooldown: number;
 }
 
-/** Defines the structure for the main Zustand store. */
 export interface GameState {
     appStatus: AppStatus;
-
-    // In-game resources
     gold: number;
     health: number;
     currentWave: number;
@@ -114,6 +122,8 @@ export interface GameState {
     enemies: Record<string, EnemyInstance>;
     towers: Record<string, TowerInstance>;
     projectiles: Record<string, ProjectileInstance>;
+    // --- NEW: Add auras to the game state ---
+    auras: Record<string, AuraInstance>;
 
     // UI State
     selectedTowerForBuild: string | null;
@@ -127,6 +137,6 @@ export interface GameState {
     paths: Vector2D[][] | null;
     levelStyle: string | null;
 
-    // --- NEW: Camera State ---
+    // Camera State
     camera: CameraState;
 }
