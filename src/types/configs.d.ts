@@ -11,6 +11,23 @@
 // Reusable Sub-Types
 // =================================================================
 
+/**
+ * Defines the possible types for a single tile on the game grid.
+ * NOTE: We are using a mix of uppercase (from JSON keys) and lowercase (internal logic)
+ * types for now. This should be standardized in a future refactor.
+ */
+export type TileType =
+    | 'BUILDABLE'
+    | 'PATH'
+    | 'BASE_ZONE'
+    | 'TREE'
+    | 'MOUNTAIN'
+    | 'LAKE'
+    | 'BORDER'
+    | 'spawn'
+    | 'end'
+    | 'empty';
+
 export interface InfoPanelStat {
     label: string;
     value_path: string;
@@ -128,6 +145,7 @@ export interface EnemyTypeConfig {
 export interface TargetingPersona {
     name: string;
     description: string;
+
     priority_function: string;
 }
 
@@ -225,6 +243,4 @@ export interface AllConfigs {
     waveScaling: WaveScalingConfig;
     statusEffects: Record<string, unknown>; // Keep these if their structure isn't fully defined yet
     formations: Record<string, unknown>; // Keep these if their structure isn't fully defined yet
-    // *** IMPORTANT: The problematic '[key: string]: unknown;' line has been removed from here. ***
-    // This allows TypeScript to precisely infer the types of the explicitly defined properties.
 }

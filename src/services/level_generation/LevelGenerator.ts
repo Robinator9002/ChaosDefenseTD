@@ -50,15 +50,16 @@ class LevelGenerator {
             return null;
         }
 
-        // 3. Convert tile-based paths to pixel-based Vector2D paths for enemies
+        // 3. Place environmental features (obstacles)
+        this.placeFeatures(grid, params);
+
+        // 4. Convert tile-based paths to pixel-based Vector2D paths for enemies
         const pixelPaths = tilePaths.map((path) =>
             path.map((tile) => ({
                 x: tile.x * TILE_SIZE + TILE_SIZE / 2,
                 y: tile.y * TILE_SIZE + TILE_SIZE / 2,
             })),
         );
-
-        // TODO: 4. Implement Feature Placement Logic
 
         console.log(
             `[LevelGenerator] Successfully generated level for style: ${styleName} with ${pixelPaths.length} path(s).`,
@@ -124,9 +125,9 @@ class LevelGenerator {
         const elbowX = Math.floor(Math.random() * (grid.width - margin * 4)) + margin * 2;
 
         // Carve the path into the grid by setting tile types
-        this.carveLine(grid, start.x, start.y, elbowX, start.y, 'path');
-        this.carveLine(grid, elbowX, start.y, elbowX, end.y, 'path');
-        this.carveLine(grid, elbowX, end.y, end.x, end.y, 'path');
+        this.carveLine(grid, start.x, start.y, elbowX, start.y, 'PATH');
+        this.carveLine(grid, elbowX, start.y, elbowX, end.y, 'PATH');
+        this.carveLine(grid, elbowX, end.y, end.x, end.y, 'PATH');
 
         // Mark start and end tiles specifically
         grid.setTileType(start.x, start.y, 'spawn');
@@ -181,7 +182,7 @@ class LevelGenerator {
 
     /**
      * Creates a simplified numerical grid for the A* Pathfinder.
-     * Walkable tiles ('path', 'spawn', 'end') are marked as 0, all others as 1 (obstacle).
+     * Walkable tiles are marked as 0, all others as 1 (obstacle).
      * @param grid - The game's logical Grid object.
      * @returns A 2D number array suitable for the Pathfinder service.
      */
@@ -192,9 +193,8 @@ class LevelGenerator {
             for (let x = 0; x < grid.width; x++) {
                 const tile = grid.getTile(x, y);
                 const tileType = tile?.tileType;
-                // Path, spawn, and end points are walkable (0)
                 const isWalkable =
-                    tileType === 'path' || tileType === 'spawn' || tileType === 'end';
+                    tileType === 'PATH' || tileType === 'spawn' || tileType === 'end';
                 pathfinderGrid[y][x] = isWalkable ? 0 : 1;
             }
         }
@@ -207,8 +207,32 @@ class LevelGenerator {
      * @param params - The generation parameters for the current level style.
      */
     private placeFeatures(grid: Grid, params: LevelGenerationParams): void {
-        console.log('Feature placement not yet implemented.');
-        // This is where we'll add logic for placing mountains, lakes, etc.
+        const features = params.features;
+        if (!features) return;
+
+        for (const featureName in features) {
+            const config = features[featureName];
+            const count = Math.floor(Math.random() * (config.max - config.min + 1)) + config.min;
+
+            // Convert plural lowercase 'mountains' to singular uppercase 'MOUNTAIN'
+            const tileType = featureName.slice(0, -1).toUpperCase() as TileType;
+
+            for (let i = 0; i < count; i++) {
+                // Try to place a feature a few times before giving up
+                for (let attempt = 0; attempt < 10; attempt++) {
+                    const x = Math.floor(Math.random() * grid.width);
+                    const y = Math.floor(Math.random() * grid.height);
+                    const tile = grid.getTile(x, y);
+
+                    // Only place features on 'BUILDABLE' ground
+                    if (tile && tile.tileType === 'BUILDABLE') {
+                        grid.setTileType(x, y, tileType);
+                        break; // Move to the next feature instance
+                    }
+                }
+            }
+            console.log(`[LevelGenerator] Placed ${count} of ${featureName}.`);
+        }
     }
 }
 

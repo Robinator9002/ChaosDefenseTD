@@ -1,6 +1,7 @@
 // src/types/game.d.ts
 
-import type { EnemyTypeConfig, TowerTypeConfig, UpgradeConfig } from './configs';
+import type { EnemyTypeConfig, TowerTypeConfig } from './configs';
+import type { Grid } from '../services/level_generation/Grid'; // Import the Grid class type
 
 /**
  * This file contains TypeScript interfaces for the dynamic, in-game state.
@@ -111,4 +112,9 @@ export interface GameState {
 
     // Wave Management State
     waveState: WaveState;
+
+    // --- NEW: Level Data ---
+    grid: Grid | null;
+    paths: Vector2D[][] | null;
+    levelStyle: string | null;
 }

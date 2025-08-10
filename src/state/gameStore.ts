@@ -17,18 +17,9 @@ import EnemyManager from '../services/entities/EnemyManager';
 import TowerManager from '../services/entities/TowerManager';
 import ProjectileManager from '../services/entities/ProjectileManager';
 import ConfigService from '../services/ConfigService';
+import LevelGenerator from '../services/level_generation/LevelGenerator';
 
-const TILE_SIZE = 32;
-const DUMMY_PATH: Vector2D[] = [
-    { x: 0 * TILE_SIZE, y: 10 * TILE_SIZE },
-    { x: 5 * TILE_SIZE, y: 10 * TILE_SIZE },
-    { x: 5 * TILE_SIZE, y: 5 * TILE_SIZE },
-    { x: 15 * TILE_SIZE, y: 5 * TILE_SIZE },
-    { x: 15 * TILE_SIZE, y: 15 * TILE_SIZE },
-    { x: 25 * TILE_SIZE, y: 15 * TILE_SIZE },
-    { x: 25 * TILE_SIZE, y: 3 * TILE_SIZE },
-    { x: 40 * TILE_SIZE, y: 3 * TILE_SIZE },
-];
+// DUMMY_PATH is no longer needed and has been removed.
 
 export interface GameActions {
     setAppStatus: (status: AppStatus) => void;
@@ -42,15 +33,16 @@ export interface GameActions {
     damageEnemy: (enemyId: string, amount: number) => void;
     // Tower Actions
     placeTower: (config: TowerTypeConfig, tile: Vector2D) => void;
-    setSelectedTowerForBuild: (towerId: string | null) => void; // New action
+    setSelectedTowerForBuild: (towerId: string | null) => void;
     // Projectile Actions
     spawnProjectile: (tower: TowerInstance, target: EnemyInstance) => void;
     removeProjectile: (projectileId: string) => void;
     // Session
-    initializeGameSession: () => void;
+    initializeGameSession: (levelStyle: string) => void; // Now accepts a level style
     update: (dt: number) => void;
 }
 
+// The Grid type is now part of the base GameState, so this extension is simpler.
 export interface GameStateWithManagers extends GameState {
     waveManager: WaveManager | null;
     enemyManager: EnemyManager | null;
@@ -73,6 +65,9 @@ const initialState: GameStateWithManagers = {
     enemyManager: null,
     towerManager: null,
     projectileManager: null,
+    grid: null, // Initialize grid as null
+    paths: null, // Initialize paths as null
+    levelStyle: null, // Initialize levelStyle as null
 };
 
 export const useGameStore = create<GameStateWithManagers & GameActions>((set, get) => ({
@@ -133,7 +128,7 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
             config,
             tilePosition: tile,
             cooldown: 0,
-            currentPersona: 'SOLDIER',
+            currentPersona: 'EXECUTIONER', // Default persona
             appliedUpgradeIds: [],
             totalInvestment: config.cost,
             currentDamage: config.attack?.data.damage ?? 0,
@@ -148,7 +143,6 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
 
     setSelectedTowerForBuild: (towerId) =>
         set((state) => {
-            // If clicking the same tower again, deselect it.
             if (state.selectedTowerForBuild === towerId) {
                 return { selectedTowerForBuild: null };
             }
@@ -181,14 +175,40 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
             return { projectiles: newProjectiles };
         }),
 
-    initializeGameSession: () => {
+    initializeGameSession: (levelStyle) => {
         const configs = ConfigService.configs;
         if (!configs) return;
-        const waveManager = new WaveManager(configs, DUMMY_PATH);
+
+        // Generate the level
+        const generationResult = LevelGenerator.generateLevel(levelStyle);
+        if (!generationResult || generationResult.paths.length === 0) {
+            console.error(
+                `Failed to initialize game session: Could not generate level "${levelStyle}"`,
+            );
+            // Potentially set an error state here
+            return;
+        }
+
+        const { grid, paths } = generationResult;
+        const mainPath = paths[0]; // Use the first generated path for the WaveManager
+
+        // Initialize managers with the new level data
+        const waveManager = new WaveManager(configs, mainPath);
         const enemyManager = new EnemyManager();
         const towerManager = new TowerManager();
         const projectileManager = new ProjectileManager();
-        set({ waveManager, enemyManager, towerManager, projectileManager, appStatus: 'in-game' });
+
+        set({
+            ...initialState, // Reset state to initial values
+            grid,
+            paths,
+            levelStyle,
+            waveManager,
+            enemyManager,
+            towerManager,
+            projectileManager,
+            appStatus: 'in-game',
+        });
     },
 
     update: (dt) => {
