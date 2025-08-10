@@ -60,7 +60,6 @@ export const generateMap = (
     // 3. Run the DFS algorithm.
     while (stack.length > 0) {
         const current = stack[stack.length - 1];
-        const neighbors = [];
 
         const directions = shuffle([
             { dx: 0, dy: -1, wallDx: 0, wallDy: -1 }, // Up
