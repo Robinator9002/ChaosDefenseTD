@@ -16,7 +16,7 @@ import type { EnemyTypeConfig, TowerTypeConfig } from '../types/configs';
 import WaveManager from '../services/waves/WaveManager';
 import EnemyManager from '../services/entities/EnemyManager';
 import TowerManager from '../services/entities/TowerManager';
-import ProjectileManager from '../services/entities/ProjectileManager';
+import ProjectileManager from '../services/projectiles/ProjectileManager';
 import ConfigService from '../services/ConfigService';
 import LevelGenerator from '../services/level_generation/LevelGenerator';
 import UpgradeService from '../services/upgrades/UpgradeService'; // Import the new service
