@@ -1,0 +1,33 @@
+{
+    "gatling": {
+        "name": "Gatling Gun",
+        "cost": 100,
+        "color": "#00E5FF",
+        "baseDamage": 5,
+        "baseRange": 150,
+        "baseFireRate": 10,
+        "projectileSpeed": 15,
+        "projectileColor": "#fde047",
+        "upgrades": [
+            { "cost": 75, "damage": 3, "range": 10 },
+            { "cost": 150, "damage": 5, "range": 15, "fireRate": 2 },
+            { "cost": 300, "damage": 10, "range": 25, "fireRate": 3 }
+        ]
+    },
+    "rocket": {
+        "name": "Rocket Pod",
+        "cost": 250,
+        "color": "#f97316",
+        "baseDamage": 50,
+        "baseRange": 250,
+        "baseFireRate": 1,
+        "projectileSpeed": 5,
+        "projectileColor": "#ef4444",
+        "aoeRadius": 75,
+        "upgrades": [
+            { "cost": 200, "damage": 25, "aoeRadius": 10 },
+            { "cost": 400, "damage": 50, "range": 25, "aoeRadius": 15 },
+            { "cost": 800, "damage": 100, "range": 50, "aoeRadius": 20 }
+        ]
+    }
+}

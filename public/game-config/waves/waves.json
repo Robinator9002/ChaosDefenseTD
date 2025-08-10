@@ -1,0 +1,12 @@
+[
+    { "scout": 10, "brute": 0 },
+    { "scout": 15, "brute": 2 },
+    { "scout": 20, "brute": 5 },
+    { "scout": 10, "brute": 10 },
+    { "scout": 0, "brute": 15 },
+    { "scout": 30, "brute": 10 },
+    { "scout": 40, "brute": 20 },
+    { "scout": 0, "brute": 40 },
+    { "scout": 50, "brute": 50 },
+    { "scout": 100, "brute": 75 }
+]
