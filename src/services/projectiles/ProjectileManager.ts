@@ -1,6 +1,7 @@
 // src/services/projectiles/ProjectileManager.ts
 
 import type { GameState, Vector2D, ProjectileInstance, EnemyInstance } from '../../types/game';
+import type { StatusEffectValue } from '../../types/configs'; // <-- Import StatusEffectValue
 import type { StoreApi } from 'zustand';
 import type { GameActions } from '../../state/gameStore';
 
@@ -72,12 +73,13 @@ class ProjectileManager {
         get: StoreApi<GameStore>['getState'],
     ): void {
         const { enemies, damageEnemy, applyStatusEffect } = get();
-        const sourceTowerId = projectile.sourceTowerId; // Assuming we add this to ProjectileInstance
+        const sourceTowerId = projectile.sourceTowerId;
 
         projectile.hitEnemyIds.push(target.id);
         damageEnemy(target.id, projectile.damage);
-        // --- FINAL STEP: Apply on-hit effects ---
-        projectile.effectsToApply?.forEach((effect) => {
+
+        // FIX: Explicitly type the 'effect' parameter
+        projectile.effectsToApply?.forEach((effect: StatusEffectValue) => {
             applyStatusEffect(target.id, effect, sourceTowerId);
         });
 
@@ -91,8 +93,8 @@ class ProjectileManager {
             for (const blastEnemy of enemiesInBlast) {
                 damageEnemy(blastEnemy.id, projectile.damage);
                 projectile.hitEnemyIds.push(blastEnemy.id);
-                // --- FINAL STEP: Apply on-blast effects ---
-                projectile.onBlastEffects?.forEach((effect) => {
+                // FIX: Explicitly type the 'effect' parameter
+                projectile.onBlastEffects?.forEach((effect: StatusEffectValue) => {
                     applyStatusEffect(blastEnemy.id, effect, sourceTowerId);
                 });
             }
