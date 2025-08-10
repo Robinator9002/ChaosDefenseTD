@@ -7,23 +7,20 @@ import type { Vector2D, ProjectileInstance, TowerInstance, EnemyInstance } from 
 import type { Grid } from '../../services/level_generation/Grid';
 
 // =================================================================
-// Drawing Helper Functions
+// Drawing Helper Functions (No changes here)
 // =================================================================
 
-/**
- * Draws the entire level grid, tile by tile.
- * FIX: Now draws each tile slightly larger to prevent visual gaps or grid lines
- * between tiles, ensuring a seamless map appearance.
- */
 const drawGrid = (
     ctx: CanvasRenderingContext2D,
     grid: Grid,
     levelStyle: string,
     TILE_SIZE: number,
+    zoom: number,
 ) => {
     const styleConfig = ConfigService.configs?.levelStyles[levelStyle];
     if (!styleConfig) return;
     const tileDefs = styleConfig.tile_definitions;
+    const drawSize = zoom >= 1.0 ? TILE_SIZE + 1 : TILE_SIZE;
 
     for (let y = 0; y < grid.height; y++) {
         for (let x = 0; x < grid.width; x++) {
@@ -31,23 +28,31 @@ const drawGrid = (
             if (tile) {
                 const def = tileDefs[tile.tileType];
                 ctx.fillStyle = def ? `rgb(${def.color.join(',')})` : 'rgb(20, 20, 30)';
-                // Draw the tile slightly larger to prevent seams
-                ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE + 1, TILE_SIZE + 1);
+                ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, drawSize, drawSize);
             }
         }
     }
 };
 
-// No changes to the functions below
 const drawTowers = (
     ctx: CanvasRenderingContext2D,
     towers: Record<string, TowerInstance>,
     TILE_SIZE: number,
+    selectedTowerId: string | null,
 ) => {
     Object.values(towers).forEach((tower) => {
         const { tilePosition, config } = tower;
         const x = tilePosition.x * TILE_SIZE;
         const y = tilePosition.y * TILE_SIZE;
+
+        // --- NEW: Highlight selected tower ---
+        if (tower.id === selectedTowerId) {
+            ctx.fillStyle = 'rgba(255, 255, 0, 0.4)'; // Yellow glow
+            ctx.beginPath();
+            ctx.arc(x + TILE_SIZE / 2, y + TILE_SIZE / 2, TILE_SIZE, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
         ctx.fillStyle = `rgb(${config.placeholder_color.join(',')})`;
         ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
         ctx.fillStyle = `rgba(${config.placeholder_color.join(',')}, 0.7)`;
@@ -143,8 +148,6 @@ export const GameCanvas = () => {
 
     const selectedTowerForBuild = useGameStore((state) => state.selectedTowerForBuild);
 
-    // --- Camera Utility Functions ---
-
     const screenToWorld = (
         screenPos: Vector2D,
         camera: { offset: Vector2D; zoom: number },
@@ -178,13 +181,12 @@ export const GameCanvas = () => {
         };
     };
 
-    // --- Input Handlers ---
-
     const handleMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
-        const { camera, setCameraState } = useGameStore.getState();
+        const { camera } = useGameStore.getState();
         const screenPos = { x: event.clientX, y: event.clientY };
 
         if (isPanning) {
+            const { setCameraState } = useGameStore.getState();
             const dx = screenPos.x - panStartRef.current.x;
             const dy = screenPos.y - panStartRef.current.y;
             const newOffset = { x: camera.offset.x + dx, y: camera.offset.y + dy };
@@ -205,21 +207,50 @@ export const GameCanvas = () => {
 
     const handleClick = () => {
         if (!mousePosition) return;
-        const { placeTower, setSelectedTowerForBuild, grid, gold } = useGameStore.getState();
-        if (!selectedTowerForBuild || !grid) return;
 
-        const towerConfig = ConfigService.configs?.towerTypes[selectedTowerForBuild];
-        if (!towerConfig || gold < towerConfig.cost) return;
-
+        const {
+            placeTower,
+            setSelectedTowerForBuild,
+            grid,
+            gold,
+            towers,
+            setSelectedTowerInstanceId,
+        } = useGameStore.getState();
         const TILE_SIZE = ConfigService.configs?.gameSettings.tile_size ?? 32;
         const tileX = Math.floor(mousePosition.x / TILE_SIZE);
         const tileY = Math.floor(mousePosition.y / TILE_SIZE);
 
-        const targetTile = grid.getTile(tileX, tileY);
-        if (!targetTile || targetTile.tileType !== 'BUILDABLE') return;
+        // --- NEW: Tower Selection Logic ---
+        // Check if a tower already exists at the clicked tile
+        const clickedTower = Object.values(towers).find(
+            (t) => t.tilePosition.x === tileX && t.tilePosition.y === tileY,
+        );
 
-        placeTower(towerConfig, { x: tileX, y: tileY });
-        setSelectedTowerForBuild(null);
+        if (clickedTower) {
+            setSelectedTowerInstanceId(clickedTower.id);
+            setSelectedTowerForBuild(null); // Deselect any tower from build menu
+            return;
+        }
+
+        // If trying to build a tower
+        if (selectedTowerForBuild) {
+            if (!grid) return;
+            const towerConfig = ConfigService.configs?.towerTypes[selectedTowerForBuild];
+            if (!towerConfig || gold < towerConfig.cost) return;
+
+            const targetTile = grid.getTile(tileX, tileY);
+            if (!targetTile || targetTile.tileType !== 'BUILDABLE') {
+                // If clicking an invalid build tile, deselect the tower from the build menu
+                setSelectedTowerForBuild(null);
+                return;
+            }
+
+            placeTower(towerConfig, { x: tileX, y: tileY });
+            setSelectedTowerForBuild(null);
+        } else {
+            // If clicking on empty space with nothing selected, deselect any selected tower
+            setSelectedTowerInstanceId(null);
+        }
     };
 
     const handleMouseDown = (event: React.MouseEvent<HTMLCanvasElement>) => {
@@ -246,7 +277,6 @@ export const GameCanvas = () => {
         const worldWidth = grid.width * TILE_SIZE;
         const worldHeight = grid.height * TILE_SIZE;
 
-        // --- FIX: Use Math.min to ensure the entire map is visible on max zoom out ---
         const minZoomX = canvas.width / worldWidth;
         const minZoomY = canvas.height / worldHeight;
         const minZoom = Math.min(minZoomX, minZoomY);
@@ -259,15 +289,12 @@ export const GameCanvas = () => {
             y: event.clientY - rect.top,
         };
 
-        // --- FIX: Implement cursor-centric zoom logic ---
         const worldPosBeforeZoom = screenToWorld(mousePosOnScreen, camera);
-
         const newZoom = clamp(
             camera.zoom - event.deltaY * zoomSensitivity * 0.05,
             minZoom,
             maxZoom,
         );
-
         const newOffsetX = mousePosOnScreen.x - worldPosBeforeZoom.x * newZoom;
         const newOffsetY = mousePosOnScreen.y - worldPosBeforeZoom.y * newZoom;
 
@@ -289,7 +316,6 @@ export const GameCanvas = () => {
             canvas.width = width;
             canvas.height = height;
 
-            // --- FIX: Re-calculate minZoom and re-clamp camera on resize ---
             const { camera, setCameraState, grid } = useGameStore.getState();
             if (!grid) return;
 
@@ -316,8 +342,15 @@ export const GameCanvas = () => {
 
             updateGameLogic(dt);
 
-            const { towers, enemies, projectiles, grid, levelStyle, camera } =
-                useGameStore.getState();
+            const {
+                towers,
+                enemies,
+                projectiles,
+                grid,
+                levelStyle,
+                camera,
+                selectedTowerInstanceId,
+            } = useGameStore.getState();
             const TILE_SIZE = ConfigService.configs?.gameSettings.tile_size ?? 32;
 
             ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
@@ -326,13 +359,13 @@ export const GameCanvas = () => {
             ctx.scale(camera.zoom, camera.zoom);
 
             if (grid && levelStyle) {
-                drawGrid(ctx, grid, levelStyle, TILE_SIZE);
+                drawGrid(ctx, grid, levelStyle, TILE_SIZE, camera.zoom);
             } else {
                 ctx.fillStyle = '#0f0f1c';
                 ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
             }
 
-            drawTowers(ctx, towers, TILE_SIZE);
+            drawTowers(ctx, towers, TILE_SIZE, selectedTowerInstanceId);
             drawEnemies(ctx, enemies);
             drawProjectiles(ctx, projectiles);
 

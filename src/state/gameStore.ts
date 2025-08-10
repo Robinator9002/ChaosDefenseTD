@@ -32,6 +32,9 @@ export interface GameActions {
     damageEnemy: (enemyId: string, amount: number) => void;
     placeTower: (config: TowerTypeConfig, tile: Vector2D) => void;
     setSelectedTowerForBuild: (towerId: string | null) => void;
+    // --- NEW: Actions for tower selection and upgrades ---
+    setSelectedTowerInstanceId: (towerId: string | null) => void;
+    upgradeTower: (towerId: string, upgradeId: string) => void;
     spawnProjectile: (tower: TowerInstance, target: EnemyInstance) => void;
     removeProjectile: (projectileId: string) => void;
     initializeGameSession: (levelStyle: string) => void;
@@ -149,8 +152,28 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
             if (state.selectedTowerForBuild === towerId) {
                 return { selectedTowerForBuild: null };
             }
-            return { selectedTowerForBuild: towerId };
+            // When selecting a tower to build, deselect any instance
+            return { selectedTowerForBuild: towerId, selectedTowerInstanceId: null };
         }),
+
+    // --- NEW: Tower Selection & Upgrade Actions ---
+    setSelectedTowerInstanceId: (towerId) =>
+        set((state) => {
+            if (state.selectedTowerInstanceId === towerId) {
+                return { selectedTowerInstanceId: null }; // Deselect if clicking the same tower
+            }
+            // When selecting an instance, deselect any tower from the build menu
+            return { selectedTowerInstanceId: towerId, selectedTowerForBuild: null };
+        }),
+
+    upgradeTower: (towerId, upgradeId) => {
+        console.log(
+            `Store action: upgradeTower called for tower ${towerId} with upgrade ${upgradeId}`,
+        );
+        // TODO: This is where the core logic will go.
+        // It will find the tower, find the upgrade, check cost, subtract gold,
+        // and apply the new stats to the tower instance.
+    },
 
     spawnProjectile: (tower, target) => {
         if (!tower.config.attack) return;
@@ -192,7 +215,6 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
 
         const { grid, paths } = generationResult;
 
-        // --- FIX: Pass all generated paths to the WaveManager ---
         const waveManager = new WaveManager(configs, paths);
         const enemyManager = new EnemyManager();
         const towerManager = new TowerManager();
@@ -215,8 +237,6 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
         const { appStatus, waveManager, enemyManager, towerManager, projectileManager } = get();
         if (appStatus !== 'in-game') return;
 
-        // Note: The order of updates can matter.
-        // For example, updating towers first allows them to fire at the previous frame's enemy positions.
         towerManager?.update(get, set, dt);
         projectileManager?.update(get, set, dt);
         enemyManager?.update(get, set, dt);
