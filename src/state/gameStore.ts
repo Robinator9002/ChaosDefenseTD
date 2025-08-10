@@ -19,6 +19,7 @@ import TowerManager from '../services/entities/TowerManager';
 import ProjectileManager from '../services/entities/ProjectileManager';
 import ConfigService from '../services/ConfigService';
 import LevelGenerator from '../services/level_generation/LevelGenerator';
+import UpgradeService from '../services/upgrades/UpgradeService'; // Import the new service
 
 export interface GameActions {
     setAppStatus: (status: AppStatus) => void;
@@ -32,7 +33,6 @@ export interface GameActions {
     damageEnemy: (enemyId: string, amount: number) => void;
     placeTower: (config: TowerTypeConfig, tile: Vector2D) => void;
     setSelectedTowerForBuild: (towerId: string | null) => void;
-    // --- NEW: Actions for tower selection and upgrades ---
     setSelectedTowerInstanceId: (towerId: string | null) => void;
     upgradeTower: (towerId: string, upgradeId: string) => void;
     spawnProjectile: (tower: TowerInstance, target: EnemyInstance) => void;
@@ -75,7 +75,7 @@ const initialState: GameStateWithManagers = {
 export const useGameStore = create<GameStateWithManagers & GameActions>((set, get) => ({
     ...initialState,
 
-    // --- Actions ---
+    // --- Actions (no changes to most actions) ---
     setAppStatus: (status) => set({ appStatus: status }),
     addGold: (amount) => set((state) => ({ gold: state.gold + amount })),
     removeHealth: (amount) => set((state) => ({ health: Math.max(0, state.health - amount) })),
@@ -85,7 +85,6 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
         set((state) => ({
             camera: { ...state.camera, ...updates },
         })),
-
     spawnEnemy: (config, path) => {
         const newEnemy: EnemyInstance = {
             id: uuidv4(),
@@ -100,21 +99,18 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
         };
         set((state) => ({ enemies: { ...state.enemies, [newEnemy.id]: newEnemy } }));
     },
-
     removeEnemy: (enemyId) =>
         set((state) => {
             const newEnemies = { ...state.enemies };
             delete newEnemies[enemyId];
             return { enemies: newEnemies };
         }),
-
     updateEnemy: (enemyId, updates) =>
         set((state) => {
             const enemy = state.enemies[enemyId];
             if (!enemy) return {};
             return { enemies: { ...state.enemies, [enemyId]: { ...enemy, ...updates } } };
         }),
-
     damageEnemy: (enemyId, amount) =>
         set((state) => {
             const enemy = state.enemies[enemyId];
@@ -127,7 +123,6 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
             }
             return { enemies: { ...state.enemies, [enemyId]: { ...enemy, currentHp: newHp } } };
         }),
-
     placeTower: (config, tile) => {
         const newTower: TowerInstance = {
             id: uuidv4(),
@@ -146,33 +141,76 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
             gold: state.gold - config.cost,
         }));
     },
-
     setSelectedTowerForBuild: (towerId) =>
         set((state) => {
             if (state.selectedTowerForBuild === towerId) {
                 return { selectedTowerForBuild: null };
             }
-            // When selecting a tower to build, deselect any instance
             return { selectedTowerForBuild: towerId, selectedTowerInstanceId: null };
         }),
-
-    // --- NEW: Tower Selection & Upgrade Actions ---
     setSelectedTowerInstanceId: (towerId) =>
         set((state) => {
             if (state.selectedTowerInstanceId === towerId) {
-                return { selectedTowerInstanceId: null }; // Deselect if clicking the same tower
+                return { selectedTowerInstanceId: null };
             }
-            // When selecting an instance, deselect any tower from the build menu
             return { selectedTowerInstanceId: towerId, selectedTowerForBuild: null };
         }),
 
+    // --- NEW: Implemented upgradeTower action ---
     upgradeTower: (towerId, upgradeId) => {
-        console.log(
-            `Store action: upgradeTower called for tower ${towerId} with upgrade ${upgradeId}`,
-        );
-        // TODO: This is where the core logic will go.
-        // It will find the tower, find the upgrade, check cost, subtract gold,
-        // and apply the new stats to the tower instance.
+        set((state) => {
+            const { towers, gold } = state;
+            const towerToUpgrade = towers[towerId];
+
+            if (!towerToUpgrade) {
+                console.error(`Upgrade failed: Tower with ID ${towerId} not found.`);
+                return {};
+            }
+
+            // Find the correct upgrade configuration
+            const towerTypeKey = towerToUpgrade.config.sprite_key.split('/')[1].replace('.png', '');
+            const upgradeFile = ConfigService.configs?.towerUpgrades[towerTypeKey];
+            if (!upgradeFile) {
+                console.error(`Upgrade failed: No upgrade file for ${towerTypeKey}.`);
+                return {};
+            }
+
+            const upgradeConfig = [
+                ...upgradeFile.path_a.upgrades,
+                ...upgradeFile.path_b.upgrades,
+            ].find((u) => u.id === upgradeId);
+
+            if (!upgradeConfig) {
+                console.error(`Upgrade failed: Upgrade with ID ${upgradeId} not found.`);
+                return {};
+            }
+
+            // --- Validation Checks ---
+            if (gold < upgradeConfig.cost) {
+                console.log('Upgrade failed: Not enough gold.');
+                return {};
+            }
+            if (towerToUpgrade.appliedUpgradeIds.includes(upgradeId)) {
+                console.log('Upgrade failed: Upgrade already applied.');
+                return {};
+            }
+
+            // Apply the upgrade using the service
+            let upgradedTower = UpgradeService.applyUpgrade(towerToUpgrade, upgradeConfig);
+
+            // Update metadata on the tower instance
+            upgradedTower.appliedUpgradeIds.push(upgradeId);
+            upgradedTower.totalInvestment += upgradeConfig.cost;
+
+            // Return the new state slices
+            return {
+                gold: state.gold - upgradeConfig.cost,
+                towers: {
+                    ...state.towers,
+                    [towerId]: upgradedTower,
+                },
+            };
+        });
     },
 
     spawnProjectile: (tower, target) => {
@@ -193,18 +231,15 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
             projectiles: { ...state.projectiles, [newProjectile.id]: newProjectile },
         }));
     },
-
     removeProjectile: (projectileId) =>
         set((state) => {
             const newProjectiles = { ...state.projectiles };
             delete newProjectiles[projectileId];
             return { projectiles: newProjectiles };
         }),
-
     initializeGameSession: (levelStyle) => {
         const configs = ConfigService.configs;
         if (!configs) return;
-
         const generationResult = LevelGenerator.generateLevel(levelStyle);
         if (!generationResult || generationResult.paths.length === 0) {
             console.error(
@@ -212,14 +247,11 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
             );
             return;
         }
-
         const { grid, paths } = generationResult;
-
         const waveManager = new WaveManager(configs, paths);
         const enemyManager = new EnemyManager();
         const towerManager = new TowerManager();
         const projectileManager = new ProjectileManager();
-
         set({
             ...initialState,
             grid,
@@ -232,11 +264,9 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
             appStatus: 'in-game',
         });
     },
-
     update: (dt) => {
         const { appStatus, waveManager, enemyManager, towerManager, projectileManager } = get();
         if (appStatus !== 'in-game') return;
-
         towerManager?.update(get, set, dt);
         projectileManager?.update(get, set, dt);
         enemyManager?.update(get, set, dt);

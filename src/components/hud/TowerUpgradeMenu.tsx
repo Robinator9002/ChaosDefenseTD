@@ -52,11 +52,12 @@ const UpgradeButton = ({
  */
 const UpgradePathColumn = ({ path, tower }: { path: UpgradePath; tower: TowerInstance }) => {
     const gold = useGameStore((state) => state.gold);
+    // --- FIX: Get the upgradeTower action from the store ---
+    const upgradeTower = useGameStore((state) => state.upgradeTower);
 
-    // This function will eventually call the store action
     const handleUpgrade = (upgradeId: string) => {
-        console.log(`Attempting to buy upgrade ${upgradeId} for tower ${tower.id}`);
-        // TODO: Call the `upgradeTower` action from the store here.
+        // Call the action from the store
+        upgradeTower(tower.id, upgradeId);
     };
 
     return (
@@ -85,20 +86,15 @@ const UpgradePathColumn = ({ path, tower }: { path: UpgradePath; tower: TowerIns
  * It appears when a tower is selected on the canvas.
  */
 export const TowerUpgradeMenu = () => {
-    // Subscribe to the ID of the selected tower. The component will re-render when this changes.
     const selectedTowerId = useGameStore((state) => state.selectedTowerInstanceId);
-
-    // Get the full tower instance from the store if an ID is selected.
     const selectedTower = useGameStore((state) =>
         selectedTowerId ? state.towers[selectedTowerId] : null,
     );
 
     if (!selectedTower) {
-        return null; // Render nothing if no tower is selected.
+        return null;
     }
 
-    // The tower's ID in the config (e.g., "turret", "mortar") is derived from its sprite_key.
-    // This is a bit of a temporary solution until a more direct ID is available on the config.
     const towerTypeKey = selectedTower.config.sprite_key.split('/')[1].replace('.png', '');
     const upgradeFile = ConfigService.configs?.towerUpgrades[towerTypeKey] as
         | TowerUpgradeFile
