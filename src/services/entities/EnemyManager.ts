@@ -7,8 +7,8 @@ import type { GameActions } from '../../state/gameStore';
 type GameStore = GameState & GameActions;
 
 /**
- * Manages the logic for all active enemies, including movement,
- * pathfinding, and health updates.
+ * Manages the logic for all active enemies, including calculating
+ * stat modifications from effects, movement, and pathfinding.
  */
 class EnemyManager {
     /**
@@ -22,62 +22,91 @@ class EnemyManager {
         set: StoreApi<GameStore>['setState'],
         dt: number,
     ): void {
-        const { enemies, health } = get(); // Also get health as it might be modified
-        const updatedEnemies: Record<string, EnemyInstance> = { ...enemies };
-        let updatedHealth = health; // Keep track of health changes locally
+        const { enemies, health } = get();
+        const updatedEnemies: Record<string, EnemyInstance> = {};
+        let updatedHealth = health;
         let hasChanges = false;
 
-        for (const id in updatedEnemies) {
-            const enemy = updatedEnemies[id];
+        for (const id in enemies) {
+            let enemy = { ...enemies[id] };
             if (!enemy) continue;
+
+            // --- REFACTOR START: Calculate final stats based on effects ---
+            this.applyEffectModifiers(enemy);
+            // --- REFACTOR END ---
 
             // Handle enemy reaching the end of the path
             if (enemy.pathIndex >= enemy.path.length - 1) {
-                console.log(`Enemy ${enemy.id} reached the end.`);
-                updatedHealth -= enemy.config.base_stats.damage; // Deduct health locally
-                delete updatedEnemies[id]; // Remove enemy locally
+                updatedHealth -= enemy.config.base_stats.damage;
+                delete updatedEnemies[id]; // Mark for deletion
                 hasChanges = true;
-                continue; // Move to next enemy
+                continue;
             }
 
-            // --- Move enemy logic ---
+            // --- Move enemy logic using the (potentially modified) currentSpeed ---
             const targetPosition = enemy.path[enemy.pathIndex + 1];
-            const currentPosition = enemy.position;
-            const direction = this.getDirection(currentPosition, targetPosition);
-            const distanceToTarget = this.getDistance(currentPosition, targetPosition);
             const distanceToMove = enemy.currentSpeed * dt;
-
-            let newPosition: Vector2D;
-            let nextPathIndex = enemy.pathIndex;
+            const distanceToTarget = this.getDistance(enemy.position, targetPosition);
 
             if (distanceToMove >= distanceToTarget) {
-                newPosition = { ...targetPosition };
-                nextPathIndex++;
+                enemy.position = { ...targetPosition };
+                enemy.pathIndex++;
             } else {
-                newPosition = {
-                    x: currentPosition.x + direction.x * distanceToMove,
-                    y: currentPosition.y + direction.y * distanceToMove,
-                };
+                const direction = this.getDirection(enemy.position, targetPosition);
+                enemy.position.x += direction.x * distanceToMove;
+                enemy.position.y += direction.y * distanceToMove;
             }
 
-            // Check if the position or pathIndex actually changed
-            if (
-                newPosition.x !== enemy.position.x ||
-                newPosition.y !== enemy.position.y ||
-                nextPathIndex !== enemy.pathIndex
-            ) {
-                updatedEnemies[id] = { ...enemy, position: newPosition, pathIndex: nextPathIndex };
-                hasChanges = true;
-            }
+            updatedEnemies[id] = enemy;
+            hasChanges = true; // Assume changes if any enemies are present
         }
 
-        // After iterating through all enemies, apply the batched updates in a single call.
         if (hasChanges) {
             set({
                 enemies: updatedEnemies,
-                health: updatedHealth, // Update health as part of the batch
+                health: updatedHealth,
             });
         }
+    }
+
+    /**
+     * Calculates and applies the modifications from active status effects
+     * to an enemy's current stats for the frame.
+     * @param enemy - The enemy instance to modify.
+     */
+    private applyEffectModifiers(enemy: EnemyInstance): void {
+        // Reset to base stats at the start of the frame
+        enemy.currentSpeed = enemy.config.base_stats.speed;
+        enemy.currentArmor = enemy.config.base_stats.armor;
+
+        if (!enemy.effects || enemy.effects.length === 0) {
+            return;
+        }
+
+        // Calculate the total potency for stackable effects
+        let totalSlowPotency = 0;
+
+        for (const effect of enemy.effects) {
+            switch (effect.id) {
+                case 'slow':
+                    totalSlowPotency += effect.potency;
+                    break;
+                case 'stun':
+                    // A stun is a 100% slow
+                    totalSlowPotency = 1;
+                    break;
+                case 'armor_break':
+                    enemy.currentArmor -= effect.potency;
+                    break;
+                // Add cases for other effects like 'vulnerability' here
+                // Note: Vulnerability will likely be checked in the damage calculation logic,
+                // not as a direct stat modification on the enemy.
+            }
+        }
+
+        // Apply the final calculated modifiers
+        enemy.currentSpeed *= 1 - Math.min(totalSlowPotency, 1); // Cap slow at 100%
+        enemy.currentArmor = Math.max(0, enemy.currentArmor); // Armor can't go below zero
     }
 
     private getDirection(from: Vector2D, to: Vector2D): Vector2D {
