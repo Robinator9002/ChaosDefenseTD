@@ -13,18 +13,17 @@ import type {
     CameraState,
     AuraInstance,
 } from '../types/game';
-import type { EnemyTypeConfig, TowerTypeConfig } from '../types/configs';
+import type { EnemyTypeConfig, TowerTypeConfig, StatusEffectValue } from '../types/configs'; // <-- Import StatusEffectValue
 import WaveManager from '../services/waves/WaveManager';
 import EnemyManager from '../services/entities/EnemyManager';
 import TowerManager from '../services/entities/TowerManager';
 import ProjectileManager from '../services/projectiles/ProjectileManager';
 import AuraManager from '../services/projectiles/AuraManager';
+import StatusEffectManager from '../services/effects/StatusEffectManager'; // <-- NEW: Import StatusEffectManager
 import ConfigService from '../services/ConfigService';
 import LevelGenerator from '../services/level_generation/LevelGenerator';
 import UpgradeService from '../services/upgrades/UpgradeService';
-import AttackHandler from '../services/attacks/AttackHandler'; // <-- Import AttackHandler
 
-// GameActions interface remains the same
 export interface GameActions {
     setAppStatus: (status: AppStatus) => void;
     addGold: (amount: number) => void;
@@ -42,6 +41,8 @@ export interface GameActions {
     spawnProjectile: (tower: TowerInstance, target: EnemyInstance) => void;
     removeProjectile: (projectileId: string) => void;
     addAura: (aura: AuraInstance) => void;
+    // --- NEW: Action to apply a status effect ---
+    applyStatusEffect: (targetId: string, effect: StatusEffectValue, sourceTowerId: string) => void;
     initializeGameSession: (levelStyle: string) => void;
     update: (dt: number) => void;
 }
@@ -52,6 +53,7 @@ export interface GameStateWithManagers extends GameState {
     towerManager: TowerManager | null;
     projectileManager: ProjectileManager | null;
     auraManager: AuraManager | null;
+    statusEffectManager: StatusEffectManager | null; // <-- NEW: Add manager instance
 }
 
 const initialState: GameStateWithManagers = {
@@ -71,6 +73,7 @@ const initialState: GameStateWithManagers = {
     towerManager: null,
     projectileManager: null,
     auraManager: null,
+    statusEffectManager: null, // <-- NEW: Initialize manager
     grid: null,
     paths: null,
     levelStyle: null,
@@ -83,16 +86,13 @@ const initialState: GameStateWithManagers = {
 export const useGameStore = create<GameStateWithManagers & GameActions>((set, get) => ({
     ...initialState,
 
-    // Most actions are unchanged...
+    // --- Most actions are unchanged ---
     setAppStatus: (status) => set({ appStatus: status }),
     addGold: (amount) => set((state) => ({ gold: state.gold + amount })),
     removeHealth: (amount) => set((state) => ({ health: Math.max(0, state.health - amount) })),
     setWaveState: (waveState) =>
         set((state) => ({ waveState: { ...state.waveState, ...waveState } })),
-    setCameraState: (updates) =>
-        set((state) => ({
-            camera: { ...state.camera, ...updates },
-        })),
+    setCameraState: (updates) => set((state) => ({ camera: { ...state.camera, ...updates } })),
     spawnEnemy: (config, path) => {
         const newEnemy: EnemyInstance = {
             id: uuidv4(),
@@ -143,6 +143,8 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
             currentDamage: config.attack?.data.damage ?? 0,
             currentRange: config.attack?.data.range ?? 0,
             currentFireRate: config.attack?.data.fire_rate ?? 0,
+            currentPierce: config.attack?.data.pierce,
+            currentChains: config.attack?.data.chains,
         };
         set((state) => ({
             towers: { ...state.towers, [newTower.id]: newTower },
@@ -151,16 +153,12 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
     },
     setSelectedTowerForBuild: (towerId) =>
         set((state) => {
-            if (state.selectedTowerForBuild === towerId) {
-                return { selectedTowerForBuild: null };
-            }
+            if (state.selectedTowerForBuild === towerId) return { selectedTowerForBuild: null };
             return { selectedTowerForBuild: towerId, selectedTowerInstanceId: null };
         }),
     setSelectedTowerInstanceId: (towerId) =>
         set((state) => {
-            if (state.selectedTowerInstanceId === towerId) {
-                return { selectedTowerInstanceId: null };
-            }
+            if (state.selectedTowerInstanceId === towerId) return { selectedTowerInstanceId: null };
             return { selectedTowerInstanceId: towerId, selectedTowerForBuild: null };
         }),
     upgradeTower: (towerId, upgradeId) => {
@@ -190,13 +188,10 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
             };
         });
     },
-
-    // --- REFACTOR: spawnProjectile now accepts buffed tower stats ---
     spawnProjectile: (tower, target) => {
         if (!tower.config.attack) return;
         const TILE_SIZE = ConfigService.configs?.gameSettings.tile_size ?? 32;
         const attackData = tower.config.attack.data;
-
         const newProjectile: ProjectileInstance = {
             id: uuidv4(),
             position: {
@@ -204,20 +199,18 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
                 y: tower.tilePosition.y * TILE_SIZE + TILE_SIZE / 2,
             },
             targetId: target.id,
-            speed: 500, // This could also become a tower stat
-            damage: tower.currentDamage, // Use the potentially buffed damage
+            speed: 500,
+            damage: tower.currentDamage,
             blastRadius: attackData.blast_radius,
-            // Pass advanced properties from the tower's current stats
             pierce: tower.currentPierce,
             chains: tower.currentChains,
             effectsToApply: attackData.effects ? Object.values(attackData.effects) : [],
-            hitEnemyIds: [], // Always starts empty
+            hitEnemyIds: [],
         };
         set((state) => ({
             projectiles: { ...state.projectiles, [newProjectile.id]: newProjectile },
         }));
     },
-
     removeProjectile: (projectileId) =>
         set((state) => {
             const newProjectiles = { ...state.projectiles };
@@ -225,26 +218,28 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
             return { projectiles: newProjectiles };
         }),
     addAura: (aura) => {
-        set((state) => ({
-            auras: { ...state.auras, [aura.id]: aura },
-        }));
+        set((state) => ({ auras: { ...state.auras, [aura.id]: aura } }));
+    },
+    // --- NEW: Implement applyStatusEffect action ---
+    applyStatusEffect: (targetId, effect, sourceTowerId) => {
+        const { statusEffectManager, enemies } = get();
+        const target = enemies[targetId];
+        if (statusEffectManager && target) {
+            statusEffectManager.applyEffect(target, effect, sourceTowerId, set);
+        }
     },
     initializeGameSession: (levelStyle) => {
         const configs = ConfigService.configs;
         if (!configs) return;
         const generationResult = LevelGenerator.generateLevel(levelStyle);
-        if (!generationResult || generationResult.paths.length === 0) {
-            console.error(
-                `Failed to initialize game session: Could not generate level "${levelStyle}"`,
-            );
-            return;
-        }
+        if (!generationResult || generationResult.paths.length === 0) return;
         const { grid, paths } = generationResult;
         const waveManager = new WaveManager(configs, paths);
         const enemyManager = new EnemyManager();
         const towerManager = new TowerManager();
         const projectileManager = new ProjectileManager();
         const auraManager = new AuraManager();
+        const statusEffectManager = new StatusEffectManager(); // <-- NEW: Instantiate manager
 
         set({
             ...initialState,
@@ -256,6 +251,7 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
             towerManager,
             projectileManager,
             auraManager,
+            statusEffectManager, // <-- NEW: Add manager to state
             appStatus: 'in-game',
         });
     },
@@ -267,12 +263,14 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
             towerManager,
             projectileManager,
             auraManager,
+            statusEffectManager,
         } = get();
         if (appStatus !== 'in-game') return;
 
         towerManager?.update(get, set, dt);
         projectileManager?.update(get, set, dt);
         auraManager?.update(get, set, dt);
+        statusEffectManager?.update(get, set, dt); // <-- NEW: Call manager's update
         enemyManager?.update(get, set, dt);
         waveManager?.update(get, set, dt);
     },

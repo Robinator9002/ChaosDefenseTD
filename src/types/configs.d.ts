@@ -11,11 +11,6 @@
 // Reusable Sub-Types
 // =================================================================
 
-/**
- * Defines the possible types for a single tile on the game grid.
- * NOTE: We are using a mix of uppercase (from JSON keys) and lowercase (internal logic)
- * types for now. This should be standardized in a future refactor.
- */
 export type TileType =
     | 'BUILDABLE'
     | 'PATH'
@@ -59,6 +54,9 @@ export interface TowerAttack {
         bonus_damage_vs_armor_multiplier?: number;
         effects?: Record<string, StatusEffectValue>;
         on_blast_effects?: StatusEffectValue[];
+        // --- NEW: Add optional pierce and chains ---
+        pierce?: number;
+        chains?: number;
     };
 }
 
@@ -200,7 +198,6 @@ export interface LevelStyleConfig {
     tile_definitions: Record<string, TileDefinition>;
 }
 
-// --- NEW: Specific types for scaling configs ---
 export interface WaveScalingConfig {
     enemy_count: {
         base: number;
@@ -226,11 +223,6 @@ export interface DifficultySetting {
 
 export type DifficultyScalingConfig = Record<string, DifficultySetting>;
 
-// --- NEW: Stricter AllConfigs type ---
-/**
- * Defines the final, structured shape of all loaded configuration data.
- * This is now a strict interface, ensuring type safety when accessing configs.
- */
 export interface AllConfigs {
     towerTypes: Record<string, TowerTypeConfig>;
     towerUpgrades: Record<string, TowerUpgradeFile>;
@@ -241,6 +233,6 @@ export interface AllConfigs {
     targetingAi: Record<string, TargetingPersona>;
     difficultyScaling: DifficultyScalingConfig;
     waveScaling: WaveScalingConfig;
-    statusEffects: Record<string, unknown>; // Keep these if their structure isn't fully defined yet
-    formations: Record<string, unknown>; // Keep these if their structure isn't fully defined yet
+    statusEffects: Record<string, unknown>;
+    formations: Record<string, unknown>;
 }
