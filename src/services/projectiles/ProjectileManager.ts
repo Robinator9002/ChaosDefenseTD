@@ -17,7 +17,7 @@ class ProjectileManager {
         set: StoreApi<GameStore>['setState'],
         dt: number,
     ): void {
-        const { projectiles, enemies, damageEnemy, applyStatusEffect } = get();
+        const { projectiles, enemies } = get();
         const updatedProjectiles: Record<string, ProjectileInstance> = { ...projectiles };
         let hasChanges = false;
 
@@ -29,17 +29,18 @@ class ProjectileManager {
 
             // --- Re-targeting Logic ---
             if (!target) {
+                // If the original target is gone, try to find a new one nearby
                 const newTarget = this.findNewTarget(
                     projectile.position,
                     enemies,
                     projectile.hitEnemyIds,
-                    50,
+                    100,
                 );
                 if (newTarget) {
                     projectile.targetId = newTarget.id;
                     target = newTarget;
                 } else {
-                    // Fizzle: no target found.
+                    // If no new target, the projectile fizzles and is removed.
                     delete updatedProjectiles[id];
                     hasChanges = true;
                     continue;
@@ -53,13 +54,13 @@ class ProjectileManager {
 
             // --- Collision and Movement Logic ---
             if (distanceToMove >= distanceToTarget) {
-                // On collision, move projectile exactly to target's last position
+                // On collision, move projectile exactly to the target's last known position
                 projectile.position = { ...targetPosition };
 
                 // Handle the hit, which might modify the projectile (pierce/chain)
                 this.handleHit(projectile, target, get);
 
-                // If the projectile is expended (no pierce/chains left), remove it.
+                // If the projectile is now expended (no pierce/chains left), remove it.
                 if ((projectile.pierce ?? 0) <= 0 && (projectile.chains ?? 0) <= 0) {
                     delete updatedProjectiles[id];
                     hasChanges = true;
@@ -67,9 +68,9 @@ class ProjectileManager {
                 }
             }
 
-            // --- Normal Movement ---
+            // --- Post-Hit or Normal Movement ---
             // This now correctly runs for piercing projectiles AFTER they hit,
-            // moving them past their last target.
+            // moving them past their last target, or for projectiles still in flight.
             const direction = this.getDirection(projectile.position, target.position);
             projectile.position.x += direction.x * distanceToMove;
             projectile.position.y += direction.y * distanceToMove;
@@ -94,7 +95,7 @@ class ProjectileManager {
         const sourceTowerId = projectile.sourceTowerId;
 
         // --- Primary Target Hit ---
-        // Ensure we don't hit the same target multiple times with one projectile.
+        // Ensure we don't hit the same target multiple times with one projectile instance.
         if (!projectile.hitEnemyIds.includes(target.id)) {
             damageEnemy(target.id, projectile.damage);
             projectile.effectsToApply?.forEach((effect: StatusEffectValue) => {
@@ -141,6 +142,9 @@ class ProjectileManager {
         }
     }
 
+    /**
+     * Finds the nearest valid new target for chaining or re-targeting.
+     */
     private findNewTarget(
         fromPosition: Vector2D,
         allEnemies: Record<string, EnemyInstance>,
@@ -170,6 +174,7 @@ class ProjectileManager {
     };
 
     private getDistance = (a: Vector2D, b: Vector2D): number => Math.sqrt(this.getDistanceSq(a, b));
+
     private getDistanceSq = (a: Vector2D, b: Vector2D): number =>
         (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
 }

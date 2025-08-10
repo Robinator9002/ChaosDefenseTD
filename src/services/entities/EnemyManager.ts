@@ -28,17 +28,17 @@ class EnemyManager {
         let hasChanges = false;
 
         for (const id in enemies) {
+            // Create a mutable copy to work with for this frame
             let enemy = { ...enemies[id] };
             if (!enemy) continue;
 
-            // --- REFACTOR START: Calculate final stats based on effects ---
+            // --- Calculate final stats for this frame based on active effects ---
             this.applyEffectModifiers(enemy);
-            // --- REFACTOR END ---
 
-            // Handle enemy reaching the end of the path
+            // --- Handle enemy reaching the end of the path ---
             if (enemy.pathIndex >= enemy.path.length - 1) {
                 updatedHealth -= enemy.config.base_stats.damage;
-                delete updatedEnemies[id]; // Mark for deletion
+                // By not adding the enemy to updatedEnemies, it is effectively removed.
                 hasChanges = true;
                 continue;
             }
@@ -53,12 +53,15 @@ class EnemyManager {
                 enemy.pathIndex++;
             } else {
                 const direction = this.getDirection(enemy.position, targetPosition);
-                enemy.position.x += direction.x * distanceToMove;
-                enemy.position.y += direction.y * distanceToMove;
+                enemy.position = {
+                    x: enemy.position.x + direction.x * distanceToMove,
+                    y: enemy.position.y + direction.y * distanceToMove,
+                };
             }
 
+            // Add the updated enemy to our list for this frame.
             updatedEnemies[id] = enemy;
-            hasChanges = true; // Assume changes if any enemies are present
+            hasChanges = true;
         }
 
         if (hasChanges) {
@@ -71,11 +74,11 @@ class EnemyManager {
 
     /**
      * Calculates and applies the modifications from active status effects
-     * to an enemy's current stats for the frame.
+     * to an enemy's current stats for the frame. This method mutates the enemy object.
      * @param enemy - The enemy instance to modify.
      */
     private applyEffectModifiers(enemy: EnemyInstance): void {
-        // Reset to base stats at the start of the frame
+        // Reset to base stats at the start of each frame's calculation
         enemy.currentSpeed = enemy.config.base_stats.speed;
         enemy.currentArmor = enemy.config.base_stats.armor;
 
@@ -92,20 +95,21 @@ class EnemyManager {
                     totalSlowPotency += effect.potency;
                     break;
                 case 'stun':
-                    // A stun is a 100% slow
+                    // A stun is a 100% slow, overriding other slows.
                     totalSlowPotency = 1;
                     break;
                 case 'armor_break':
                     enemy.currentArmor -= effect.potency;
                     break;
-                // Add cases for other effects like 'vulnerability' here
-                // Note: Vulnerability will likely be checked in the damage calculation logic,
-                // not as a direct stat modification on the enemy.
+                // Note: 'vulnerability' is handled in the damageEnemy action,
+                // as it's a multiplier on incoming damage, not a stat modification.
             }
         }
 
         // Apply the final calculated modifiers
-        enemy.currentSpeed *= 1 - Math.min(totalSlowPotency, 1); // Cap slow at 100%
+        if (totalSlowPotency > 0) {
+            enemy.currentSpeed *= 1 - Math.min(totalSlowPotency, 1); // Cap slow at 100%
+        }
         enemy.currentArmor = Math.max(0, enemy.currentArmor); // Armor can't go below zero
     }
 

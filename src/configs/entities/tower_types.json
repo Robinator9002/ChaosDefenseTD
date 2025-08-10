@@ -117,7 +117,7 @@
         "damage": 20,
         "range": 500,
         "fire_rate": 0.25,
-        "blast_radius": 60,
+        "blast_radius": 80,
         "on_blast_effects": [{ "id": "slow", "potency": 0.3, "duration": 1.5 }]
       }
     }

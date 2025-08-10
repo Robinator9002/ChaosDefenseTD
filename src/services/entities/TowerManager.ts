@@ -1,6 +1,7 @@
 // src/services/entities/TowerManager.ts
 
 import type { GameState, TowerInstance, EnemyInstance, Vector2D } from '../../types/game';
+import type { StatusEffectValue } from '../../types/configs';
 import type { StoreApi } from 'zustand';
 import type { GameActions } from '../../state/gameStore';
 import AttackHandler from '../attacks/AttackHandler';
@@ -8,8 +9,8 @@ import AttackHandler from '../attacks/AttackHandler';
 type GameStore = GameState & GameActions;
 
 /**
- * Manages the logic for all active towers, including targeting,
- * cooldowns, and delegating attacks to the AttackHandler.
+ * Manages logic for all active towers, including targeting, cooldowns,
+ * applying passive auras, and delegating attacks.
  */
 class TowerManager {
     public update(
@@ -17,7 +18,7 @@ class TowerManager {
         set: StoreApi<GameStore>['setState'],
         dt: number,
     ): void {
-        const { towers, enemies } = get();
+        const { towers, enemies, applyStatusEffect } = get();
         const enemyList = Object.values(enemies);
         const supportTowers = Object.values(towers).filter((t) => t.config.auras);
 
@@ -25,6 +26,35 @@ class TowerManager {
         let hasChanges = false;
 
         for (const tower of Object.values(towers)) {
+            // --- PASSIVE AURA LOGIC ---
+            if (tower.config.auras) {
+                tower.config.auras.forEach((aura) => {
+                    if (aura.target_type === 'ENEMY') {
+                        const enemiesInAura = enemyList.filter(
+                            (enemy) =>
+                                this.getDistance(
+                                    tower.tilePosition,
+                                    this.worldToTile(enemy.position),
+                                ) <=
+                                aura.range / 32,
+                        );
+                        enemiesInAura.forEach((enemy) => {
+                            for (const effectKey in aura.effects) {
+                                // --- FIX: Construct the correct StatusEffectValue object ---
+                                const effectData = aura.effects[effectKey];
+                                const statusEffect: StatusEffectValue = {
+                                    id: effectKey, // The key is the effect's ID
+                                    potency: effectData.potency,
+                                    duration: effectData.duration,
+                                };
+                                applyStatusEffect(enemy.id, statusEffect, tower.id);
+                            }
+                        });
+                    }
+                });
+            }
+
+            // --- ACTIVE ATTACK LOGIC ---
             let towerDidChange = false;
             let newCooldown = Math.max(0, tower.cooldown - dt);
 
@@ -32,8 +62,6 @@ class TowerManager {
                 towerDidChange = true;
             }
 
-            // A tower can only act if its cooldown is 0 AND it has an attack configuration.
-            // Support-only towers will correctly be skipped here.
             if (newCooldown === 0 && tower.config.attack) {
                 const target = this.findTarget(tower, enemyList);
 
@@ -41,14 +69,8 @@ class TowerManager {
                     const buffedTower = this.applySupportBuffs(tower, supportTowers);
                     AttackHandler.executeAttack(buffedTower, target);
 
-                    // FIX: Safely calculate the new cooldown, preventing division by zero.
                     const fireRate = buffedTower.currentFireRate;
-                    if (fireRate > 0) {
-                        newCooldown = 1 / fireRate;
-                    } else {
-                        // For single-shot abilities or auras with no fire rate, provide a default.
-                        newCooldown = 1.0;
-                    }
+                    newCooldown = fireRate > 0 ? 1 / fireRate : 1.0;
                     towerDidChange = true;
                 }
             }
@@ -78,7 +100,7 @@ class TowerManager {
             const distance = this.getDistance(towerToBuff.tilePosition, supportTower.tilePosition);
 
             supportTower.config.auras?.forEach((aura) => {
-                if (distance * 32 <= aura.range) {
+                if (aura.target_type === 'TOWER' && distance * 32 <= aura.range) {
                     for (const effectKey in aura.effects) {
                         const effect = aura.effects[effectKey];
                         switch (effectKey) {
@@ -99,16 +121,8 @@ class TowerManager {
         return buffedTower;
     }
 
-    /**
-     * Finds a valid target for a given tower from a list of enemies.
-     * This is a pure utility function; it does not decide IF a tower can attack.
-     */
     private findTarget(tower: TowerInstance, enemies: EnemyInstance[]): EnemyInstance | null {
-        // FIX: Removed the '!tower.config.attack' check. This function's only job
-        // is to find an enemy in range, not to validate the tower's ability to attack.
-        if (enemies.length === 0) {
-            return null;
-        }
+        if (enemies.length === 0) return null;
 
         const towerPosition = {
             x: tower.tilePosition.x * 32 + 16,
@@ -122,12 +136,18 @@ class TowerManager {
             return dx * dx + dy * dy <= rangeSq;
         });
 
-        if (enemiesInRange.length === 0) {
-            return null;
-        }
+        if (enemiesInRange.length === 0) return null;
 
         enemiesInRange.sort((a, b) => b.pathIndex - a.pathIndex);
         return enemiesInRange[0];
+    }
+
+    private worldToTile(worldPos: Vector2D): Vector2D {
+        const TILE_SIZE = 32;
+        return {
+            x: Math.floor(worldPos.x / TILE_SIZE),
+            y: Math.floor(worldPos.y / TILE_SIZE),
+        };
     }
 
     private getDistance(a: Vector2D, b: Vector2D): number {

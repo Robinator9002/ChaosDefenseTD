@@ -1,10 +1,9 @@
-// src/services/entities/StatusEffectManager.ts
+// src/services/effects/StatusEffectManager.ts
 
 import type { GameState, EnemyInstance, ActiveStatusEffect } from '../../types/game';
 import type { StatusEffectValue } from '../../types/configs';
 import type { StoreApi } from 'zustand';
 import type { GameActions } from '../../state/gameStore';
-import { v4 as uuidv4 } from 'uuid';
 
 type GameStore = GameState & GameActions;
 
@@ -32,23 +31,23 @@ class StatusEffectManager {
         for (const enemy of Object.values(enemies)) {
             if (!enemy.effects || enemy.effects.length === 0) continue;
 
-            // Filter out expired effects and update time remaining on active ones.
-            const activeEffects = enemy.effects
+            // Update time remaining and filter out expired effects.
+            const remainingEffects = enemy.effects
                 .map((effect) => ({
                     ...effect,
                     timeRemaining: effect.timeRemaining - dt,
                 }))
                 .filter((effect) => effect.timeRemaining > 0);
 
-            if (activeEffects.length !== enemy.effects.length) {
-                updatedEnemies[enemy.id] = { ...enemy, effects: activeEffects };
+            if (remainingEffects.length !== enemy.effects.length) {
+                updatedEnemies[enemy.id] = { ...enemy, effects: remainingEffects };
                 hasChanges = true;
             }
 
-            // Handle Damage over Time (DoT) effects
-            for (const effect of activeEffects) {
+            // Handle Damage over Time (DoT) effects for currently active effects.
+            const currentEffects = updatedEnemies[enemy.id]?.effects || enemy.effects;
+            for (const effect of currentEffects) {
                 if (effect.id === 'fire' || effect.id === 'bleed' || effect.id === 'poison') {
-                    // Apply damage based on potency per second
                     damageEnemy(enemy.id, effect.potency * dt);
                 }
             }
@@ -74,29 +73,29 @@ class StatusEffectManager {
         sourceTowerId: string,
         set: StoreApi<GameStore>['setState'],
     ): void {
-        // 1. Check for Immunities
+        // 1. Check for Immunities: If the enemy is immune, do nothing.
         if (target.config.base_stats.immunities?.includes(effectData.id)) {
-            return; // The enemy is immune, do nothing.
+            return;
         }
 
-        // TODO: Handle chance-based application from upgrade configs
+        const existingEffect = target.effects.find((e) => e.id === effectData.id);
+        let newEffectsArray: ActiveStatusEffect[];
 
-        const existingEffectIndex = target.effects.findIndex((e) => e.id === effectData.id);
-
-        let newEffects: ActiveStatusEffect[];
-
-        if (existingEffectIndex !== -1) {
+        if (existingEffect) {
             // --- Stacking Logic ---
-            // For now, we'll just refresh the duration. More complex rules can be added here.
-            newEffects = [...target.effects];
-            newEffects[existingEffectIndex] = {
-                ...newEffects[existingEffectIndex],
-                potency: Math.max(newEffects[existingEffectIndex].potency, effectData.potency), // Take the stronger potency
-                timeRemaining: Math.max(
-                    newEffects[existingEffectIndex].timeRemaining,
-                    effectData.duration,
-                ), // Refresh to the longer duration
-            };
+            // Create a new array with the updated effect.
+            newEffectsArray = target.effects.map((effect) => {
+                if (effect.id === effectData.id) {
+                    // Refresh duration and take the stronger potency.
+                    return {
+                        ...effect,
+                        potency: Math.max(effect.potency, effectData.potency),
+                        timeRemaining: Math.max(effect.timeRemaining, effectData.duration),
+                        sourceTowerId, // Update source in case a different tower re-applies
+                    };
+                }
+                return effect;
+            });
         } else {
             // --- Apply New Effect ---
             const newEffect: ActiveStatusEffect = {
@@ -104,14 +103,14 @@ class StatusEffectManager {
                 timeRemaining: effectData.duration,
                 sourceTowerId,
             };
-            newEffects = [...target.effects, newEffect];
+            newEffectsArray = [...target.effects, newEffect];
         }
 
-        // Update the specific enemy in the store
+        // Update the specific enemy in the store to be efficient.
         set((state) => ({
             enemies: {
                 ...state.enemies,
-                [target.id]: { ...target, effects: newEffects },
+                [target.id]: { ...target, effects: newEffectsArray },
             },
         }));
     }

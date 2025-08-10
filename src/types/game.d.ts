@@ -3,15 +3,26 @@
 import type { EnemyTypeConfig, TowerTypeConfig, StatusEffectValue } from './configs';
 import type { Grid } from '../services/level_generation/Grid';
 
-// Core & Utility Types remain the same...
+/**
+ * This file contains TypeScript interfaces for the dynamic, in-game state.
+ * These types represent live entities like enemies and towers, and the
+ * overall state of the game session managed by Zustand.
+ */
+
+// =================================================================
+// Core & Utility Types
+// =================================================================
+
 export interface Vector2D {
     x: number;
     y: number;
 }
+
 export interface CameraState {
     offset: Vector2D;
     zoom: number;
 }
+
 export interface ActiveStatusEffect {
     id: string;
     potency: number;
@@ -20,7 +31,10 @@ export interface ActiveStatusEffect {
     sourceTowerId: string;
 }
 
+// =================================================================
 // Entity Instance Types
+// =================================================================
+
 export interface EnemyInstance {
     id: string;
     config: EnemyTypeConfig;
@@ -41,9 +55,11 @@ export interface TowerInstance {
     currentPersona: string;
     appliedUpgradeIds: string[];
     totalInvestment: number;
+    // Base combat stats that are recalculated with buffs/upgrades
     currentDamage: number;
     currentRange: number;
     currentFireRate: number;
+    // Add pierce and chain stats, which can be modified by upgrades
     currentPierce?: number;
     currentChains?: number;
 }
@@ -53,19 +69,22 @@ export interface TowerInstance {
  */
 export interface ProjectileInstance {
     id: string;
-    sourceTowerId: string; // <-- FIX: Added source tower ID
+    sourceTowerId: string;
     position: Vector2D;
     targetId: string;
     speed: number;
     damage: number;
     blastRadius?: number;
     effectsToApply?: StatusEffectValue[];
-    onBlastEffects?: StatusEffectValue[]; // <-- FIX: Added on-blast effects
+    onBlastEffects?: StatusEffectValue[];
     pierce?: number;
     chains?: number;
     hitEnemyIds: string[];
 }
 
+/**
+ * Represents a persistent area on the ground, like a firewall.
+ */
 export interface AuraInstance {
     id: string;
     sourceTowerId: string;
@@ -77,7 +96,10 @@ export interface AuraInstance {
     dps: number;
 }
 
-// Game State & Store types remain the same...
+// =================================================================
+// Game State & Store
+// =================================================================
+
 export type AppStatus =
     | 'main-menu'
     | 'workshop'
@@ -86,26 +108,38 @@ export type AppStatus =
     | 'paused'
     | 'game-over'
     | 'victory';
+
 export interface WaveState {
     waveInProgress: boolean;
     timeToNextWave: number;
     spawnQueue: string[];
     spawnCooldown: number;
 }
+
 export interface GameState {
     appStatus: AppStatus;
     gold: number;
     health: number;
     currentWave: number;
+
+    // Live entities
     enemies: Record<string, EnemyInstance>;
     towers: Record<string, TowerInstance>;
     projectiles: Record<string, ProjectileInstance>;
     auras: Record<string, AuraInstance>;
+
+    // UI State
     selectedTowerForBuild: string | null;
     selectedTowerInstanceId: string | null;
+
+    // Wave Management State
     waveState: WaveState;
+
+    // Level Data
     grid: Grid | null;
     paths: Vector2D[][] | null;
     levelStyle: string | null;
+
+    // Camera State
     camera: CameraState;
 }

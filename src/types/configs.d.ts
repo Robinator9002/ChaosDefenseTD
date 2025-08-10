@@ -54,7 +54,7 @@ export interface TowerAttack {
         bonus_damage_vs_armor_multiplier?: number;
         effects?: Record<string, StatusEffectValue>;
         on_blast_effects?: StatusEffectValue[];
-        // --- NEW: Add optional pierce and chains ---
+        // Add optional pierce and chains for projectile-based attacks
         pierce?: number;
         chains?: number;
     };
@@ -62,7 +62,8 @@ export interface TowerAttack {
 
 export interface TowerAura {
     range: number;
-    target_type: 'TOWER';
+    // Auras can target friendly towers or hostile enemies
+    target_type: 'TOWER' | 'ENEMY';
     effects: Record<string, { potency: number; duration: number }>;
 }
 
@@ -83,8 +84,17 @@ export interface TowerTypeConfig {
 }
 
 export interface UpgradeEffect {
-    type: 'add_damage' | 'add_range' | 'multiply_fire_rate' | 'add_blast_effect';
-    value: number | StatusEffectValue;
+    type:
+        | 'add_damage'
+        | 'add_range'
+        | 'multiply_fire_rate'
+        | 'add_blast_effect'
+        | 'add_effect'
+        | 'set_pierce'
+        | 'set_chains'
+        | 'modify_nested'
+        | 'modify_attack_data';
+    value: any; // Using 'any' for now to accommodate diverse upgrade structures
 }
 
 export interface UpgradeConfig {
@@ -143,7 +153,6 @@ export interface EnemyTypeConfig {
 export interface TargetingPersona {
     name: string;
     description: string;
-
     priority_function: string;
 }
 
