@@ -5,7 +5,7 @@
  * Separating this from the core logic allows for easier game design iterations and tuning.
  */
 
-import type { IEnemyType, ITowerType, IWave } from '../types';
+import type { IEnemyType, ITowerType, IWave } from '../../types';
 
 // The universal size of a grid tile in pixels. This is a fundamental unit for all positioning.
 export const TILE_SIZE = 50;

@@ -5,7 +5,7 @@
  * These helpers are deterministic and have no side effects, making them easy to test and reason about.
  */
 
-import type { IVector } from '../types';
+import type { IVector } from '../../types';
 
 /**
  * Calculates the Euclidean distance between two points (or objects with x, y properties).

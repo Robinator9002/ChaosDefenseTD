@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import type { IModalState } from '../game/types';
+import type { IModalState } from '../../types';
 
 // Define the props the Modal component expects.
 interface IModalProps {

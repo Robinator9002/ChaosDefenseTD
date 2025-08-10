@@ -6,7 +6,7 @@
  * that will be managed within the game loop.
  */
 
-import type { IPathPoint } from '../types';
+import type { IPathPoint } from '../../types';
 import { TOWER_TYPES, ENEMY_TYPES } from '../config/constants';
 
 /**

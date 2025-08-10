@@ -6,9 +6,9 @@
  */
 
 import React from 'react';
-import { Tower } from '../game/classes/indexClasses';
-import { TOWER_TYPES } from '../game/config/constants';
-import type { IGameState } from '../game/types';
+import { Tower } from '../../game/classes/indexClasses';
+import { TOWER_TYPES } from '../../game/config/constants';
+import type { IGameState } from '../../types';
 
 // Define the props the TowerPanel component expects.
 interface ITowerPanelProps {

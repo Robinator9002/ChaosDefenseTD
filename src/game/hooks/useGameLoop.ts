@@ -11,7 +11,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { Tower, Enemy, Projectile, Effect } from '../classes/indexClasses';
 import { TOWER_TYPES, WAVES, TILE_SIZE } from '../config/constants';
 import { getDistance } from '../utils/helpers';
-import type { IGameState, IGridCell, IPathPoint, IVector, IModalState } from '../types';
+import type { IGameState, IGridCell, IPathPoint, IVector, IModalState } from '../../types';
 
 // Define the arguments the hook will accept. This makes the hook's dependencies explicit.
 interface IGameLoopProps {

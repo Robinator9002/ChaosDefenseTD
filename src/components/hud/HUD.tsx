@@ -7,8 +7,8 @@
  */
 
 import React from 'react';
-import type { IGameState } from '../game/types';
-import { TOWER_TYPES } from '../game/config/constants';
+import type { IGameState } from '../../types';
+import { TOWER_TYPES } from '../../game/config/constants';
 
 // Define the props the HUD component expects to receive.
 interface IHUDProps {

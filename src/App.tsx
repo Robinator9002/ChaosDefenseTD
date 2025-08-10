@@ -12,15 +12,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 
 // Import all our structured modules
-import { HUD } from './components/HUD';
-import { TowerPanel } from './components/TowerPanel';
-import { Modal } from './components/Modal';
+import { HUD } from './components/hud/HUD';
+import { TowerPanel } from './components/panels/TowerPanel';
+import { Modal } from './components/modals/Modal';
 import { useGameLoop } from './game/hooks/useGameLoop';
 import { Tower, Enemy, Projectile, Effect } from './game/classes/indexClasses';
 import { WAVES, TOWER_TYPES, TILE_SIZE } from './game/config/constants';
 import { getDistance } from './game/utils/helpers';
 // FIXED: Use 'import type' for type-only imports to satisfy verbatimModuleSyntax.
-import type { IGameState, IModalState, IGridCell, IPathPoint, IVector } from './game/types';
+import type { IGameState, IModalState, IGridCell, IPathPoint, IVector } from './types';
 
 // The main App component
 export default function App() {
