@@ -2,8 +2,8 @@
 
 import { GameCanvas } from '../components/game/GameCanvas';
 import { TopStatsBar } from '../components/hud/bars/TopStatsBar';
-import { TowerBuildMenu } from '../components/hud/TowerBuildMenu';
-import { TowerUpgradeMenu } from '../components/hud/TowerUpgradeMenu'; // Import the new menu
+import { TowerBuildMenu } from '../components/hud/panels/TowerBuildPanels';
+import { TowerUpgradeMenu } from '../components/hud/panels/TowerUpgradePanels'; // Import the new menu
 
 /**
  * The main view for the active game session.

@@ -1,8 +1,8 @@
 // src/components/hud/TowerBuildMenu.tsx
 
-import { useGameStore } from '../../state/gameStore';
-import ConfigService from '../../services/ConfigService';
-import type { TowerTypeConfig } from '../../types/configs';
+import { useGameStore } from '../../../state/gameStore';
+import ConfigService from '../../../services/ConfigService';
+import type { TowerTypeConfig } from '../../../types/configs';
 // No need for 'shallow' anymore with individual selectors
 // import { shallow } from 'zustand/shallow';
 

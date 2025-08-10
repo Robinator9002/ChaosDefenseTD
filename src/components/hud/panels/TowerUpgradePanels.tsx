@@ -1,9 +1,9 @@
 // src/components/hud/TowerUpgradeMenu.tsx
 
-import { useGameStore } from '../../state/gameStore';
-import ConfigService from '../../services/ConfigService';
-import type { TowerInstance } from '../../types/game';
-import type { TowerUpgradeFile, UpgradeConfig, UpgradePath } from '../../types/configs';
+import { useGameStore } from '../../../state/gameStore';
+import ConfigService from '../../../services/ConfigService';
+import type { TowerInstance } from '../../../types/game';
+import type { TowerUpgradeFile, UpgradeConfig, UpgradePath } from '../../../types/configs';
 
 /**
  * A single button representing one upgrade in a path.
