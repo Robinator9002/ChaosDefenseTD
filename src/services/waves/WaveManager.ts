@@ -1,7 +1,6 @@
-// src/services/WaveManager.ts
+// src/services/waves/WaveManager.ts
 
 import type { GameState, Vector2D } from '../../types/game';
-// FIX: Correctly import AllConfigs from its definitive source: ../types/configs
 import type { AllConfigs } from '../../types/configs';
 import type { StoreApi } from 'zustand';
 import type { GameActions } from '../../state/gameStore';
@@ -10,20 +9,22 @@ type GameStore = GameState & GameActions;
 
 /**
  * Manages the logic for enemy waves, including timing, composition,
- * and spawning. It reads from the game state and configs and dispatches
- * actions back to the store.
+ * and spawning across multiple paths.
  */
 class WaveManager {
-    // Declare configs as potentially null, matching ConfigService's public property
-    private configs: AllConfigs | null;
-    private mainPath: Vector2D[];
+    private configs: AllConfigs;
+    // --- FIX: Store all available paths, not just one ---
+    private paths: Vector2D[][];
 
-    constructor(configs: AllConfigs, mainPath: Vector2D[]) {
+    constructor(configs: AllConfigs, paths: Vector2D[][]) {
         if (!configs) {
             throw new Error('WaveManager requires a valid configuration object.');
         }
+        if (!paths || paths.length === 0) {
+            throw new Error('WaveManager requires at least one path to be provided.');
+        }
         this.configs = configs;
-        this.mainPath = mainPath;
+        this.paths = paths;
     }
 
     public update(
@@ -31,20 +32,12 @@ class WaveManager {
         set: StoreApi<GameStore>['setState'],
         dt: number,
     ): void {
-        // Add a runtime type guard to ensure 'configs' is not null
-        if (!this.configs) {
-            console.error('WaveManager: Configuration not initialized. Skipping update.');
-            return;
-        }
-        // TypeScript now knows 'currentConfigs' is definitely AllConfigs
-        const currentConfigs: AllConfigs = this.configs;
-
         const { waveState } = get();
 
         if (waveState.waveInProgress) {
-            this.handleSpawning(get, set, dt, currentConfigs);
+            this.handleSpawning(get, set, dt);
         } else {
-            this.handleWaveCountdown(get, set, dt, currentConfigs);
+            this.handleWaveCountdown(get, set, dt);
         }
     }
 
@@ -52,7 +45,6 @@ class WaveManager {
         get: StoreApi<GameStore>['getState'],
         set: StoreApi<GameStore>['setState'],
         dt: number,
-        configs: AllConfigs, // Receive configs as a non-nullable parameter
     ): void {
         const { timeToNextWave } = get().waveState;
         const newTimeToNextWave = timeToNextWave - dt;
@@ -62,7 +54,7 @@ class WaveManager {
         }));
 
         if (newTimeToNextWave <= 0) {
-            this.startNextWave(get, set, configs);
+            this.startNextWave(get, set);
         }
     }
 
@@ -70,18 +62,17 @@ class WaveManager {
         get: StoreApi<GameStore>['getState'],
         set: StoreApi<GameStore>['setState'],
         dt: number,
-        configs: AllConfigs, // Receive configs as a non-nullable parameter
     ): void {
         const { spawnQueue, spawnCooldown } = get().waveState;
         const currentWave = get().currentWave;
-        const levelDifficulty = configs.gameSettings.difficulty;
+        const levelDifficulty = this.configs.gameSettings.difficulty;
 
         if (spawnQueue.length === 0) {
             if (Object.keys(get().enemies).length === 0) {
                 console.log(`Wave ${currentWave} complete!`);
-                const difficultyKey = String(configs.gameSettings.difficulty);
+                const difficultyKey = String(this.configs.gameSettings.difficulty);
                 const timeBetweenWaves =
-                    configs.difficultyScaling[difficultyKey]?.time_between_waves || 0;
+                    this.configs.difficultyScaling[difficultyKey]?.time_between_waves || 15;
 
                 set((state) => ({
                     waveState: {
@@ -97,14 +88,15 @@ class WaveManager {
         const newSpawnCooldown = spawnCooldown - dt;
         if (newSpawnCooldown <= 0) {
             const enemyIdToSpawn = spawnQueue[0];
-            const enemyConfig = configs.enemyTypes[enemyIdToSpawn];
+            const enemyConfig = this.configs.enemyTypes[enemyIdToSpawn];
 
             if (enemyConfig) {
-                get().spawnEnemy(enemyConfig, this.mainPath);
+                // --- FIX: Randomly select a path for the new enemy ---
+                const chosenPath = this.paths[Math.floor(Math.random() * this.paths.length)];
+                get().spawnEnemy(enemyConfig, chosenPath);
             }
 
-            const { waveScaling } = configs;
-
+            const { waveScaling } = this.configs;
             const calculatedSpawnCooldown = Math.max(
                 waveScaling.spawn_cooldown.minimum_seconds,
                 waveScaling.spawn_cooldown.base_seconds -
@@ -120,24 +112,21 @@ class WaveManager {
                 },
             }));
         } else {
-            if (newSpawnCooldown !== spawnCooldown) {
-                set((state) => ({
-                    waveState: { ...state.waveState, spawnCooldown: newSpawnCooldown },
-                }));
-            }
+            set((state) => ({
+                waveState: { ...state.waveState, spawnCooldown: newSpawnCooldown },
+            }));
         }
     }
 
     private startNextWave(
         get: StoreApi<GameStore>['getState'],
         set: StoreApi<GameStore>['setState'],
-        configs: AllConfigs, // Receive configs as a non-nullable parameter
     ): void {
         const newWaveNumber = get().currentWave + 1;
         console.log(`Starting Wave ${newWaveNumber}`);
 
-        const { waveScaling, enemyTypes } = configs;
-        const levelDifficulty = configs.gameSettings.difficulty;
+        const { waveScaling, enemyTypes } = this.configs;
+        const levelDifficulty = this.configs.gameSettings.difficulty;
 
         const enemyCount = Math.floor(
             waveScaling.enemy_count.base +

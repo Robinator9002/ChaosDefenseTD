@@ -10,7 +10,7 @@ import type {
     Vector2D,
     WaveState,
     ProjectileInstance,
-    CameraState, // Import CameraState
+    CameraState,
 } from '../types/game';
 import type { EnemyTypeConfig, TowerTypeConfig } from '../types/configs';
 import WaveManager from '../services/waves/WaveManager';
@@ -25,19 +25,15 @@ export interface GameActions {
     addGold: (amount: number) => void;
     removeHealth: (amount: number) => void;
     setWaveState: (waveState: Partial<WaveState>) => void;
-    setCameraState: (updates: Partial<CameraState>) => void; // New action
-    // Enemy Actions
+    setCameraState: (updates: Partial<CameraState>) => void;
     spawnEnemy: (config: EnemyTypeConfig, path: Vector2D[]) => void;
     removeEnemy: (enemyId: string) => void;
     updateEnemy: (enemyId: string, updates: Partial<EnemyInstance>) => void;
     damageEnemy: (enemyId: string, amount: number) => void;
-    // Tower Actions
     placeTower: (config: TowerTypeConfig, tile: Vector2D) => void;
     setSelectedTowerForBuild: (towerId: string | null) => void;
-    // Projectile Actions
     spawnProjectile: (tower: TowerInstance, target: EnemyInstance) => void;
     removeProjectile: (projectileId: string) => void;
-    // Session
     initializeGameSession: (levelStyle: string) => void;
     update: (dt: number) => void;
 }
@@ -67,7 +63,6 @@ const initialState: GameStateWithManagers = {
     grid: null,
     paths: null,
     levelStyle: null,
-    // --- NEW: Initialize camera state ---
     camera: {
         offset: { x: 0, y: 0 },
         zoom: 1.0,
@@ -83,8 +78,6 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
     removeHealth: (amount) => set((state) => ({ health: Math.max(0, state.health - amount) })),
     setWaveState: (waveState) =>
         set((state) => ({ waveState: { ...state.waveState, ...waveState } })),
-
-    // --- NEW: Camera Action ---
     setCameraState: (updates) =>
         set((state) => ({
             camera: { ...state.camera, ...updates },
@@ -198,9 +191,9 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
         }
 
         const { grid, paths } = generationResult;
-        const mainPath = paths[0];
 
-        const waveManager = new WaveManager(configs, mainPath);
+        // --- FIX: Pass all generated paths to the WaveManager ---
+        const waveManager = new WaveManager(configs, paths);
         const enemyManager = new EnemyManager();
         const towerManager = new TowerManager();
         const projectileManager = new ProjectileManager();
@@ -222,6 +215,8 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
         const { appStatus, waveManager, enemyManager, towerManager, projectileManager } = get();
         if (appStatus !== 'in-game') return;
 
+        // Note: The order of updates can matter.
+        // For example, updating towers first allows them to fire at the previous frame's enemy positions.
         towerManager?.update(get, set, dt);
         projectileManager?.update(get, set, dt);
         enemyManager?.update(get, set, dt);

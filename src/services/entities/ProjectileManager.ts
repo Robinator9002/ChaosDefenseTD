@@ -1,6 +1,6 @@
 // src/services/entities/ProjectileManager.ts
 
-import type { GameState, Vector2D, ProjectileInstance, EnemyInstance } from '../../types/game';
+import type { GameState, Vector2D, ProjectileInstance } from '../../types/game';
 import type { StoreApi } from 'zustand';
 import type { GameActions } from '../../state/gameStore';
 
@@ -16,10 +16,9 @@ class ProjectileManager {
         set: StoreApi<GameStore>['setState'],
         dt: number,
     ): void {
-        const { projectiles, enemies } = get();
+        const { projectiles, damageEnemy } = get(); // Get the damageEnemy action
         const updatedProjectiles: Record<string, ProjectileInstance> = { ...projectiles };
-        const updatedEnemies: Record<string, EnemyInstance> = { ...enemies };
-        let hasChanges = false;
+        let hasProjectileChanges = false;
 
         const projectileIds = Object.keys(updatedProjectiles);
 
@@ -27,11 +26,13 @@ class ProjectileManager {
             const projectile = updatedProjectiles[id];
             if (!projectile) continue;
 
-            const target = updatedEnemies[projectile.targetId];
+            // Use the current state of enemies for targeting
+            const target = get().enemies[projectile.targetId];
 
             if (!target) {
+                // Target is already gone, remove the projectile
                 delete updatedProjectiles[id];
-                hasChanges = true;
+                hasProjectileChanges = true;
                 continue;
             }
 
@@ -41,36 +42,33 @@ class ProjectileManager {
             const distanceToTarget = this.getDistance(currentPosition, targetPosition);
 
             if (distanceToMove >= distanceToTarget) {
-                const newEnemyHealth = target.currentHp - projectile.damage; // Using currentHp as per type definition
-                if (newEnemyHealth <= 0) {
-                    delete updatedEnemies[target.id];
-                } else {
-                    updatedEnemies[target.id] = { ...target, currentHp: newEnemyHealth };
-                }
+                // --- FIX: Use the centralized damageEnemy action ---
+                // This ensures all logic for damaging/killing an enemy,
+                // including awarding gold, is handled in one place.
+                damageEnemy(projectile.targetId, projectile.damage);
+
+                // TODO: Handle blast radius damage here later
+
+                // The projectile has hit, so we remove it.
                 delete updatedProjectiles[id];
-                hasChanges = true;
-                // TODO: Handle blast radius damage (would also modify updatedEnemies)
+                hasProjectileChanges = true;
                 continue;
             }
 
+            // Move the projectile towards the target
             const direction = this.getDirection(currentPosition, targetPosition);
             const newPosition = {
                 x: currentPosition.x + direction.x * distanceToMove,
                 y: currentPosition.y + direction.y * distanceToMove,
             };
 
-            if (newPosition.x !== currentPosition.x || newPosition.y !== currentPosition.y) {
-                updatedProjectiles[id] = { ...projectile, position: newPosition };
-                hasChanges = true;
-            }
+            updatedProjectiles[id] = { ...projectile, position: newPosition };
+            hasProjectileChanges = true;
         }
 
-        if (hasChanges) {
-            // FIX: Pass the new partial state object directly
-            set({
-                projectiles: updatedProjectiles,
-                enemies: updatedEnemies,
-            });
+        if (hasProjectileChanges) {
+            // Only update the projectiles slice of the state
+            set({ projectiles: updatedProjectiles });
         }
     }
 
