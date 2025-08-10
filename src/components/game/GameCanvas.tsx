@@ -31,7 +31,7 @@ const drawGrid = (
             if (tile) {
                 const def = tileDefs[tile.tileType];
                 ctx.fillStyle = def ? `rgb(${def.color.join(',')})` : 'rgb(20, 20, 30)';
-                // Draw the tile 1 pixel larger to prevent seams
+                // Draw the tile slightly larger to prevent seams
                 ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE + 1, TILE_SIZE + 1);
             }
         }
@@ -166,11 +166,9 @@ export const GameCanvas = () => {
         const worldWidth = grid.width * TILE_SIZE;
         const worldHeight = grid.height * TILE_SIZE;
 
-        // If the zoomed world is smaller than the canvas, center it.
         const centeredX = (canvas.width - worldWidth * zoom) / 2;
         const centeredY = (canvas.height - worldHeight * zoom) / 2;
 
-        // Otherwise, clamp it to the edges.
         const clampedX = clamp(offset.x, canvas.width - worldWidth * zoom, 0);
         const clampedY = clamp(offset.y, canvas.height - worldHeight * zoom, 0);
 
@@ -248,10 +246,11 @@ export const GameCanvas = () => {
         const worldWidth = grid.width * TILE_SIZE;
         const worldHeight = grid.height * TILE_SIZE;
 
+        // --- FIX: Use Math.min to ensure the entire map is visible on max zoom out ---
         const minZoomX = canvas.width / worldWidth;
         const minZoomY = canvas.height / worldHeight;
-        const minZoom = Math.max(minZoomX, minZoomY); // Use max to ensure the entire map fits
-        const maxZoom = 3.0; // Increased max zoom
+        const minZoom = Math.min(minZoomX, minZoomY);
+        const maxZoom = 3.0;
         const zoomSensitivity = 0.1;
 
         const rect = canvas.getBoundingClientRect();
@@ -260,7 +259,7 @@ export const GameCanvas = () => {
             y: event.clientY - rect.top,
         };
 
-        // --- FIX: Implement cursor-centric zoom ---
+        // --- FIX: Implement cursor-centric zoom logic ---
         const worldPosBeforeZoom = screenToWorld(mousePosOnScreen, camera);
 
         const newZoom = clamp(
@@ -290,9 +289,21 @@ export const GameCanvas = () => {
             canvas.width = width;
             canvas.height = height;
 
-            // --- FIX: Re-clamp camera on resize to prevent bad positioning ---
-            const { camera, setCameraState } = useGameStore.getState();
-            setCameraState({ offset: getClampedOffset(camera.offset, camera.zoom) });
+            // --- FIX: Re-calculate minZoom and re-clamp camera on resize ---
+            const { camera, setCameraState, grid } = useGameStore.getState();
+            if (!grid) return;
+
+            const TILE_SIZE = ConfigService.configs?.gameSettings.tile_size ?? 32;
+            const worldWidth = grid.width * TILE_SIZE;
+            const worldHeight = grid.height * TILE_SIZE;
+            const minZoomX = canvas.width / worldWidth;
+            const minZoomY = canvas.height / worldHeight;
+            const minZoom = Math.min(minZoomX, minZoomY);
+
+            const newZoom = clamp(camera.zoom, minZoom, 3.0);
+            const newOffset = getClampedOffset(camera.offset, newZoom);
+
+            setCameraState({ zoom: newZoom, offset: newOffset });
         };
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
