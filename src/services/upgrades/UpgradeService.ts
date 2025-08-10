@@ -1,7 +1,7 @@
 // src/services/UpgradeService.ts
 
-import type { TowerInstance } from '../types/game';
-import type { UpgradeConfig, UpgradeEffect, StatusEffectValue } from '../types/configs';
+import type { TowerInstance } from '../../types/game';
+import type { UpgradeConfig, UpgradeEffect, StatusEffectValue } from '../../types/configs';
 
 /**
  * A utility service for applying the effects of an upgrade to a tower instance.
