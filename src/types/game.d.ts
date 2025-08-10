@@ -55,9 +55,13 @@ export interface TowerInstance {
     currentPersona: string;
     appliedUpgradeIds: string[];
     totalInvestment: number;
+    // Base combat stats that are recalculated with buffs/upgrades
     currentDamage: number;
     currentRange: number;
     currentFireRate: number;
+    // --- NEW: Add pierce and chain stats ---
+    currentPierce?: number;
+    currentChains?: number;
 }
 
 /**
@@ -122,7 +126,6 @@ export interface GameState {
     enemies: Record<string, EnemyInstance>;
     towers: Record<string, TowerInstance>;
     projectiles: Record<string, ProjectileInstance>;
-    // --- NEW: Add auras to the game state ---
     auras: Record<string, AuraInstance>;
 
     // UI State
