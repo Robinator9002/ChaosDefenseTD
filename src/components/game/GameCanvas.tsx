@@ -3,18 +3,18 @@
 import { useRef, useEffect, useState } from 'react';
 import { useGameStore } from '../../state/gameStore';
 import ConfigService from '../../services/ConfigService';
-import type {
-    Vector2D,
-    ProjectileInstance,
-    TowerInstance,
-    EnemyInstance,
-} from '../../types/game';
+import type { Vector2D, ProjectileInstance, TowerInstance, EnemyInstance } from '../../types/game';
 import type { Grid } from '../../services/level_generation/Grid';
 
 // =================================================================
 // Drawing Helper Functions
 // =================================================================
 
+/**
+ * Draws the entire level grid, tile by tile.
+ * FIX: Now draws each tile slightly larger to prevent visual gaps or grid lines
+ * between tiles, ensuring a seamless map appearance.
+ */
 const drawGrid = (
     ctx: CanvasRenderingContext2D,
     grid: Grid,
@@ -24,18 +24,21 @@ const drawGrid = (
     const styleConfig = ConfigService.configs?.levelStyles[levelStyle];
     if (!styleConfig) return;
     const tileDefs = styleConfig.tile_definitions;
+
     for (let y = 0; y < grid.height; y++) {
         for (let x = 0; x < grid.width; x++) {
             const tile = grid.getTile(x, y);
             if (tile) {
                 const def = tileDefs[tile.tileType];
                 ctx.fillStyle = def ? `rgb(${def.color.join(',')})` : 'rgb(20, 20, 30)';
-                ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                // Draw the tile 1 pixel larger to prevent seams
+                ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE + 1, TILE_SIZE + 1);
             }
         }
     }
 };
 
+// No changes to the functions below
 const drawTowers = (
     ctx: CanvasRenderingContext2D,
     towers: Record<string, TowerInstance>,
@@ -135,19 +138,45 @@ export const GameCanvas = () => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const lastTimeRef = useRef<number>(0);
     const [mousePosition, setMousePosition] = useState<Vector2D | null>(null);
-
-    // --- NEW: State for camera panning ---
     const [isPanning, setIsPanning] = useState(false);
     const panStartRef = useRef<Vector2D>({ x: 0, y: 0 });
 
     const selectedTowerForBuild = useGameStore((state) => state.selectedTowerForBuild);
 
-    // --- NEW: Helper function to convert screen coordinates to world coordinates ---
-    const screenToWorld = (screenPos: Vector2D): Vector2D => {
-        const { camera } = useGameStore.getState();
+    // --- Camera Utility Functions ---
+
+    const screenToWorld = (
+        screenPos: Vector2D,
+        camera: { offset: Vector2D; zoom: number },
+    ): Vector2D => {
         return {
             x: (screenPos.x - camera.offset.x) / camera.zoom,
             y: (screenPos.y - camera.offset.y) / camera.zoom,
+        };
+    };
+
+    const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(value, max));
+
+    const getClampedOffset = (offset: Vector2D, zoom: number): Vector2D => {
+        const { grid } = useGameStore.getState();
+        const canvas = canvasRef.current;
+        if (!grid || !canvas) return offset;
+
+        const TILE_SIZE = ConfigService.configs?.gameSettings.tile_size ?? 32;
+        const worldWidth = grid.width * TILE_SIZE;
+        const worldHeight = grid.height * TILE_SIZE;
+
+        // If the zoomed world is smaller than the canvas, center it.
+        const centeredX = (canvas.width - worldWidth * zoom) / 2;
+        const centeredY = (canvas.height - worldHeight * zoom) / 2;
+
+        // Otherwise, clamp it to the edges.
+        const clampedX = clamp(offset.x, canvas.width - worldWidth * zoom, 0);
+        const clampedY = clamp(offset.y, canvas.height - worldHeight * zoom, 0);
+
+        return {
+            x: worldWidth * zoom < canvas.width ? centeredX : clampedX,
+            y: worldHeight * zoom < canvas.height ? centeredY : clampedY,
         };
     };
 
@@ -157,24 +186,23 @@ export const GameCanvas = () => {
         const { camera, setCameraState } = useGameStore.getState();
         const screenPos = { x: event.clientX, y: event.clientY };
 
-        // Handle camera panning if active
         if (isPanning) {
             const dx = screenPos.x - panStartRef.current.x;
             const dy = screenPos.y - panStartRef.current.y;
-            setCameraState({ offset: { x: camera.offset.x + dx, y: camera.offset.y + dy } });
+            const newOffset = { x: camera.offset.x + dx, y: camera.offset.y + dy };
+            setCameraState({ offset: getClampedOffset(newOffset, camera.zoom) });
             panStartRef.current = screenPos;
         }
 
-        // Update mouse position for UI previews, converting to world space
         const canvas = event.currentTarget;
         const rect = canvas.getBoundingClientRect();
         const canvasPos = { x: event.clientX - rect.left, y: event.clientY - rect.top };
-        setMousePosition(screenToWorld(canvasPos));
+        setMousePosition(screenToWorld(canvasPos, camera));
     };
 
     const handleMouseLeave = () => {
         setMousePosition(null);
-        setIsPanning(false); // Stop panning if mouse leaves canvas
+        setIsPanning(false);
     };
 
     const handleClick = () => {
@@ -196,9 +224,7 @@ export const GameCanvas = () => {
         setSelectedTowerForBuild(null);
     };
 
-    // --- NEW: Handlers for Panning and Zooming ---
     const handleMouseDown = (event: React.MouseEvent<HTMLCanvasElement>) => {
-        // Middle mouse button for panning
         if (event.button === 1) {
             event.preventDefault();
             setIsPanning(true);
@@ -214,15 +240,42 @@ export const GameCanvas = () => {
 
     const handleWheel = (event: React.WheelEvent<HTMLCanvasElement>) => {
         event.preventDefault();
-        const { camera, setCameraState } = useGameStore.getState();
+        const { camera, setCameraState, grid } = useGameStore.getState();
+        const canvas = canvasRef.current;
+        if (!grid || !canvas) return;
+
+        const TILE_SIZE = ConfigService.configs?.gameSettings.tile_size ?? 32;
+        const worldWidth = grid.width * TILE_SIZE;
+        const worldHeight = grid.height * TILE_SIZE;
+
+        const minZoomX = canvas.width / worldWidth;
+        const minZoomY = canvas.height / worldHeight;
+        const minZoom = Math.max(minZoomX, minZoomY); // Use max to ensure the entire map fits
+        const maxZoom = 3.0; // Increased max zoom
         const zoomSensitivity = 0.1;
-        const minZoom = 0.5;
-        const maxZoom = 2.0;
 
-        let newZoom = camera.zoom - event.deltaY * zoomSensitivity * 0.05;
-        newZoom = Math.max(minZoom, Math.min(maxZoom, newZoom)); // Clamp zoom
+        const rect = canvas.getBoundingClientRect();
+        const mousePosOnScreen = {
+            x: event.clientX - rect.left,
+            y: event.clientY - rect.top,
+        };
 
-        setCameraState({ zoom: newZoom });
+        // --- FIX: Implement cursor-centric zoom ---
+        const worldPosBeforeZoom = screenToWorld(mousePosOnScreen, camera);
+
+        const newZoom = clamp(
+            camera.zoom - event.deltaY * zoomSensitivity * 0.05,
+            minZoom,
+            maxZoom,
+        );
+
+        const newOffsetX = mousePosOnScreen.x - worldPosBeforeZoom.x * newZoom;
+        const newOffsetY = mousePosOnScreen.y - worldPosBeforeZoom.y * newZoom;
+
+        setCameraState({
+            zoom: newZoom,
+            offset: getClampedOffset({ x: newOffsetX, y: newOffsetY }, newZoom),
+        });
     };
 
     useEffect(() => {
@@ -236,6 +289,10 @@ export const GameCanvas = () => {
             const { width, height } = canvas.getBoundingClientRect();
             canvas.width = width;
             canvas.height = height;
+
+            // --- FIX: Re-clamp camera on resize to prevent bad positioning ---
+            const { camera, setCameraState } = useGameStore.getState();
+            setCameraState({ offset: getClampedOffset(camera.offset, camera.zoom) });
         };
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
@@ -253,13 +310,10 @@ export const GameCanvas = () => {
             const TILE_SIZE = ConfigService.configs?.gameSettings.tile_size ?? 32;
 
             ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-
-            // --- NEW: Apply Camera Transformations ---
             ctx.save();
             ctx.translate(camera.offset.x, camera.offset.y);
             ctx.scale(camera.zoom, camera.zoom);
 
-            // --- Draw World-Space Elements ---
             if (grid && levelStyle) {
                 drawGrid(ctx, grid, levelStyle, TILE_SIZE);
             } else {
@@ -275,9 +329,7 @@ export const GameCanvas = () => {
                 drawPlacementPreview(ctx, mousePosition, selectedTowerForBuild, grid, TILE_SIZE);
             }
 
-            // --- NEW: Restore context to draw screen-space elements if any ---
             ctx.restore();
-
             animationFrameId = requestAnimationFrame(gameLoop);
         };
 
@@ -300,7 +352,7 @@ export const GameCanvas = () => {
             onMouseDown={handleMouseDown}
             onMouseUp={handleMouseUp}
             onWheel={handleWheel}
-            onContextMenu={(e) => e.preventDefault()} // Prevent context menu on right-click
+            onContextMenu={(e) => e.preventDefault()}
         />
     );
 };
