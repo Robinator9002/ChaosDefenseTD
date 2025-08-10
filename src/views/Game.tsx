@@ -3,6 +3,7 @@
 import { GameCanvas } from '../components/game/GameCanvas';
 import { TopStatsBar } from '../components/hud/bars/TopStatsBar';
 import { TowerBuildMenu } from '../components/hud/TowerBuildMenu';
+import { TowerUpgradeMenu } from '../components/hud/TowerUpgradeMenu'; // Import the new menu
 
 /**
  * The main view for the active game session.
@@ -27,6 +28,10 @@ export const Game = () => {
                 </div>
                 <div className="pointer-events-auto">
                     <TowerBuildMenu />
+                </div>
+                {/* Add the TowerUpgradeMenu to the HUD */}
+                <div className="pointer-events-auto">
+                    <TowerUpgradeMenu />
                 </div>
             </div>
         </div>
