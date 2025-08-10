@@ -1,4 +1,4 @@
-// src/services/entities/AuraManager.ts
+// src/services/projectiles/AuraManager.ts
 
 import type { GameState, Vector2D, EnemyInstance, AuraInstance } from '../../types/game';
 import type { StoreApi } from 'zustand';
@@ -54,18 +54,6 @@ class AuraManager {
                     // of health reduction, enemy removal, and awarding gold.
                     damageEnemy(enemy.id, aura.dps * dt);
                 }
-
-                // FUTURE HOOK for Phase 2: Apply status effects.
-                // This is where we will call the StatusEffectManager.
-                // For now, the logic is prepared for that integration.
-                /*
-                if (Object.keys(aura.effects).length > 0) {
-                    const { statusEffectManager } = get();
-                    for (const effectKey in aura.effects) {
-                        statusEffectManager.applyEffect(enemy, aura.effects[effectKey], aura.sourceTowerId);
-                    }
-                }
-                */
             }
         }
 
@@ -88,5 +76,6 @@ class AuraManager {
     }
 }
 
-// Export a singleton instance so the same manager is used throughout the game.
-export default new AuraManager();
+// FIX: Export the class itself, not an instance of it.
+// This allows it to be used as a type and to be constructed with `new`.
+export default AuraManager;

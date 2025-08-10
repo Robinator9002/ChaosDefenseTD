@@ -11,15 +11,18 @@ import type {
     WaveState,
     ProjectileInstance,
     CameraState,
+    AuraInstance, // <-- NEW: Import AuraInstance
 } from '../types/game';
 import type { EnemyTypeConfig, TowerTypeConfig } from '../types/configs';
 import WaveManager from '../services/waves/WaveManager';
 import EnemyManager from '../services/entities/EnemyManager';
 import TowerManager from '../services/entities/TowerManager';
+// UPDATED: Correct path for managers
 import ProjectileManager from '../services/projectiles/ProjectileManager';
+import AuraManager from '../services/projectiles/AuraManager'; // <-- NEW: Import AuraManager
 import ConfigService from '../services/ConfigService';
 import LevelGenerator from '../services/level_generation/LevelGenerator';
-import UpgradeService from '../services/upgrades/UpgradeService'; // Import the new service
+import UpgradeService from '../services/upgrades/UpgradeService';
 
 export interface GameActions {
     setAppStatus: (status: AppStatus) => void;
@@ -37,15 +40,18 @@ export interface GameActions {
     upgradeTower: (towerId: string, upgradeId: string) => void;
     spawnProjectile: (tower: TowerInstance, target: EnemyInstance) => void;
     removeProjectile: (projectileId: string) => void;
+    addAura: (aura: AuraInstance) => void; // <-- NEW: Action to add an aura
     initializeGameSession: (levelStyle: string) => void;
     update: (dt: number) => void;
 }
 
+// Add the new AuraManager to the state definition
 export interface GameStateWithManagers extends GameState {
     waveManager: WaveManager | null;
     enemyManager: EnemyManager | null;
     towerManager: TowerManager | null;
     projectileManager: ProjectileManager | null;
+    auraManager: AuraManager | null; // <-- NEW: Add AuraManager instance
 }
 
 const initialState: GameStateWithManagers = {
@@ -57,12 +63,14 @@ const initialState: GameStateWithManagers = {
     enemies: {},
     towers: {},
     projectiles: {},
+    auras: {}, // <-- NEW: Initialize auras state
     selectedTowerForBuild: null,
     selectedTowerInstanceId: null,
     waveManager: null,
     enemyManager: null,
     towerManager: null,
     projectileManager: null,
+    auraManager: null, // <-- NEW: Initialize auraManager
     grid: null,
     paths: null,
     levelStyle: null,
@@ -75,7 +83,7 @@ const initialState: GameStateWithManagers = {
 export const useGameStore = create<GameStateWithManagers & GameActions>((set, get) => ({
     ...initialState,
 
-    // --- Actions (no changes to most actions) ---
+    // --- Most actions are unchanged ---
     setAppStatus: (status) => set({ appStatus: status }),
     addGold: (amount) => set((state) => ({ gold: state.gold + amount })),
     removeHealth: (amount) => set((state) => ({ health: Math.max(0, state.health - amount) })),
@@ -155,64 +163,33 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
             }
             return { selectedTowerInstanceId: towerId, selectedTowerForBuild: null };
         }),
-
-    // --- NEW: Implemented upgradeTower action ---
     upgradeTower: (towerId, upgradeId) => {
         set((state) => {
             const { towers, gold } = state;
             const towerToUpgrade = towers[towerId];
-
-            if (!towerToUpgrade) {
-                console.error(`Upgrade failed: Tower with ID ${towerId} not found.`);
-                return {};
-            }
-
-            // Find the correct upgrade configuration
+            if (!towerToUpgrade) return {};
             const towerTypeKey = towerToUpgrade.config.sprite_key.split('/')[1].replace('.png', '');
             const upgradeFile = ConfigService.configs?.towerUpgrades[towerTypeKey];
-            if (!upgradeFile) {
-                console.error(`Upgrade failed: No upgrade file for ${towerTypeKey}.`);
-                return {};
-            }
-
+            if (!upgradeFile) return {};
             const upgradeConfig = [
                 ...upgradeFile.path_a.upgrades,
                 ...upgradeFile.path_b.upgrades,
             ].find((u) => u.id === upgradeId);
-
-            if (!upgradeConfig) {
-                console.error(`Upgrade failed: Upgrade with ID ${upgradeId} not found.`);
+            if (
+                !upgradeConfig ||
+                gold < upgradeConfig.cost ||
+                towerToUpgrade.appliedUpgradeIds.includes(upgradeId)
+            )
                 return {};
-            }
-
-            // --- Validation Checks ---
-            if (gold < upgradeConfig.cost) {
-                console.log('Upgrade failed: Not enough gold.');
-                return {};
-            }
-            if (towerToUpgrade.appliedUpgradeIds.includes(upgradeId)) {
-                console.log('Upgrade failed: Upgrade already applied.');
-                return {};
-            }
-
-            // Apply the upgrade using the service
             let upgradedTower = UpgradeService.applyUpgrade(towerToUpgrade, upgradeConfig);
-
-            // Update metadata on the tower instance
             upgradedTower.appliedUpgradeIds.push(upgradeId);
             upgradedTower.totalInvestment += upgradeConfig.cost;
-
-            // Return the new state slices
             return {
                 gold: state.gold - upgradeConfig.cost,
-                towers: {
-                    ...state.towers,
-                    [towerId]: upgradedTower,
-                },
+                towers: { ...state.towers, [towerId]: upgradedTower },
             };
         });
     },
-
     spawnProjectile: (tower, target) => {
         if (!tower.config.attack) return;
         const TILE_SIZE = ConfigService.configs?.gameSettings.tile_size ?? 32;
@@ -226,6 +203,7 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
             speed: 500,
             damage: tower.currentDamage,
             blastRadius: tower.config.attack.data.blast_radius,
+            hitEnemyIds: [], // <-- Initialize hitEnemyIds
         };
         set((state) => ({
             projectiles: { ...state.projectiles, [newProjectile.id]: newProjectile },
@@ -237,6 +215,14 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
             delete newProjectiles[projectileId];
             return { projectiles: newProjectiles };
         }),
+
+    // --- NEW: Implement addAura action ---
+    addAura: (aura) => {
+        set((state) => ({
+            auras: { ...state.auras, [aura.id]: aura },
+        }));
+    },
+
     initializeGameSession: (levelStyle) => {
         const configs = ConfigService.configs;
         if (!configs) return;
@@ -248,10 +234,13 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
             return;
         }
         const { grid, paths } = generationResult;
+        // Instantiate all managers
         const waveManager = new WaveManager(configs, paths);
         const enemyManager = new EnemyManager();
         const towerManager = new TowerManager();
         const projectileManager = new ProjectileManager();
+        const auraManager = new AuraManager(); // <-- NEW: Instantiate AuraManager
+
         set({
             ...initialState,
             grid,
@@ -261,14 +250,27 @@ export const useGameStore = create<GameStateWithManagers & GameActions>((set, ge
             enemyManager,
             towerManager,
             projectileManager,
+            auraManager, // <-- NEW: Add manager to state
             appStatus: 'in-game',
         });
     },
+
     update: (dt) => {
-        const { appStatus, waveManager, enemyManager, towerManager, projectileManager } = get();
+        // Add auraManager to the destructuring
+        const {
+            appStatus,
+            waveManager,
+            enemyManager,
+            towerManager,
+            projectileManager,
+            auraManager,
+        } = get();
         if (appStatus !== 'in-game') return;
+
+        // Update all managers in logical order
         towerManager?.update(get, set, dt);
         projectileManager?.update(get, set, dt);
+        auraManager?.update(get, set, dt); // <-- NEW: Call auraManager's update
         enemyManager?.update(get, set, dt);
         waveManager?.update(get, set, dt);
     },
