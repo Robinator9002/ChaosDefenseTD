@@ -1,26 +1,47 @@
 /* Import the core Tailwind CSS functionality */
 @import 'tailwindcss';
 
-/* Define all custom theme tokens using the @theme directive.
-  This is the modern, Vite-integrated way to configure Tailwind.
-  These are compiled into CSS variables like var(--color-chaos-primary).
-*/
+/* --- THEME DEFINITION --- */
+/* This is the modern, Vite-integrated way to configure Tailwind. */
+/* These are compiled into CSS variables like var(--color-chaos-primary). */
 @theme {
-    --color-chaos-primary: #1a1a2e;
-    --color-chaos-secondary: #16213e;
-    --color-chaos-accent: #e94560;
-    --color-chaos-highlight: #0f3460;
-    --color-chaos-text-primary: #dcdcdc;
-    --color-chaos-text-secondary: #a0a0a0;
-    --color-chaos-text-disabled: #606060;
+    /* --- COLOR PALETTE --- */
+    /* A darker, more thematic color scheme for a chaotic sci-fi vibe. */
+    --color-chaos-primary: #0d0d1a; /* Deep, near-black space blue */
+    --color-chaos-secondary: #1a1a2e; /* Dark navy for panels and secondary backgrounds */
+    --color-chaos-accent: #e94560; /* The primary "danger" or "action" color */
+    --color-chaos-highlight: #4a4a7a; /* Muted purple for borders and subtle highlights */
+    --color-chaos-interactive: #00e5ff; /* Bright cyan for interactive elements, hover states */
+    --color-chaos-success: #00ff85; /* Vivid green for success messages, upgrades */
+    --color-chaos-currency: #ffd700; /* Gold/yellow specifically for money */
+
+    /* --- TEXT COLORS --- */
+    --color-chaos-text-primary: #eaeaea;
+    --color-chaos-text-secondary: #a0a0b5;
+    --color-chaos-text-disabled: #606075;
 }
 
-/* Define global base styles for the application.
-  Here we apply our custom theme variables to the body.
-*/
+/* --- GLOBAL BASE STYLES --- */
 body {
+    /* Apply our custom theme variables to the body. */
     @apply bg-chaos-primary text-chaos-text-primary;
-    font-family: 'Inter', sans-serif; /* A good default sans-serif font */
+    /* Swapped font to something more thematic. Make sure to import it in your main HTML file. */
+    font-family: 'Orbitron', sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    /* Add a subtle texture or grid to the background for depth */
+    background-image: linear-gradient(rgba(13, 13, 26, 0.95), rgba(13, 13, 26, 0.95)),
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'%3E%3Cg fill='%231A1A2E'%3E%3Cpolygon points='0 10 10 0 20 10 10 20'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* --- GLOBAL ANIMATIONS --- */
+/* A subtle glow animation we can apply to interactive UI elements. */
+@keyframes glow {
+    0%,
+    100% {
+        box-shadow: 0 0 5px var(--color-chaos-interactive), 0 0 10px var(--color-chaos-interactive);
+    }
+    50% {
+        box-shadow: 0 0 15px var(--color-chaos-interactive), 0 0 25px var(--color-chaos-interactive);
+    }
 }
