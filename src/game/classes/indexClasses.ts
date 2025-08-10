@@ -2,12 +2,11 @@
 
 /**
  * This file contains the class definitions for all dynamic game entities.
- * These classes are not React components; they are blueprints for objects
- * that will be managed within the game loop.
+ * The constructors have been updated to accept a configuration object,
+ * decoupling them from static constants and allowing them to use data loaded from JSON.
  */
 
-import type { IPathPoint } from '../../types';
-import { TOWER_TYPES, ENEMY_TYPES } from '../config/constants';
+import type { IPathPoint, ITowerType, IEnemyType } from '../../types';
 
 /**
  * Represents a single tower placed on the grid by the player.
@@ -28,7 +27,16 @@ export class Tower {
     public fireRate: number;
     public aoeRadius: number;
 
-    constructor(id: number, x: number, y: number, type: string) {
+    // Ref to the loaded tower configuration
+    private towerTypes: { [key: string]: ITowerType };
+
+    constructor(
+        id: number,
+        x: number,
+        y: number,
+        type: string,
+        towerTypes: { [key: string]: ITowerType },
+    ) {
         this.id = id;
         this.x = x;
         this.y = y;
@@ -36,6 +44,9 @@ export class Tower {
         this.level = 0;
         this.target = null;
         this.fireCooldown = 0;
+
+        // Store the config for later use
+        this.towerTypes = towerTypes;
 
         // Initialize stats based on type and level
         this.damage = 0;
@@ -47,10 +58,9 @@ export class Tower {
 
     /**
      * Recalculates the tower's stats based on its type and current level.
-     * This should be called after a tower is upgraded.
      */
     public updateStats(): void {
-        const typeData = TOWER_TYPES[this.type];
+        const typeData = this.towerTypes[this.type];
         this.damage = typeData.baseDamage;
         this.range = typeData.baseRange;
         this.fireRate = typeData.baseFireRate;
@@ -67,11 +77,10 @@ export class Tower {
 
     /**
      * Finds the closest enemy within range to target.
-     * @param enemies - An array of all active enemies on the map.
      */
     public findTarget(enemies: Enemy[]): void {
         this.target = null;
-        let closestDist = this.range * this.range; // Use squared distance for performance
+        let closestDist = this.range * this.range;
         for (const enemy of enemies) {
             const distSq = (this.x - enemy.x) ** 2 + (this.y - enemy.y) ** 2;
             if (distSq < closestDist) {
@@ -83,10 +92,9 @@ export class Tower {
 
     /**
      * Gets the cost of the next upgrade.
-     * @returns The cost, or Infinity if the tower is max level.
      */
     public getUpgradeCost(): number {
-        const typeData = TOWER_TYPES[this.type];
+        const typeData = this.towerTypes[this.type];
         if (this.level < typeData.upgrades.length) {
             return typeData.upgrades[this.level].cost;
         }
@@ -94,13 +102,12 @@ export class Tower {
     }
 
     /**
-     * Calculates the sell value of the tower (a percentage of total cost).
-     * @returns The amount of money returned to the player upon selling.
+     * Calculates the sell value of the tower.
      */
     public getSellValue(): number {
-        let value = TOWER_TYPES[this.type].cost;
+        let value = this.towerTypes[this.type].cost;
         for (let i = 0; i < this.level; i++) {
-            value += TOWER_TYPES[this.type].upgrades[i].cost;
+            value += this.towerTypes[this.type].upgrades[i].cost;
         }
         return Math.floor(value * 0.75);
     }
@@ -123,8 +130,13 @@ export class Enemy {
     public color: string;
     public isDead: boolean;
 
-    constructor(id: number, type: string, path: IPathPoint[]) {
-        const typeData = ENEMY_TYPES[type];
+    constructor(
+        id: number,
+        type: string,
+        path: IPathPoint[],
+        enemyTypes: { [key: string]: IEnemyType },
+    ) {
+        const typeData = enemyTypes[type];
         this.id = id;
         this.type = type;
         this.pathIndex = 0;
@@ -141,7 +153,6 @@ export class Enemy {
 
     /**
      * Reduces the enemy's health by a given amount.
-     * @param amount - The amount of damage to inflict.
      */
     public takeDamage(amount: number): void {
         this.hp -= amount;
@@ -200,11 +211,7 @@ export class Effect {
     public life: number;
     public maxLife: number;
     public type: 'explosion' | 'particle';
-
-    // Explosion-specific
     public radius: number;
-
-    // Particle-specific
     public color?: string;
     public size?: number;
     public vx?: number;
@@ -217,17 +224,16 @@ export class Effect {
         this.type = type;
 
         if (type === 'explosion') {
-            this.maxLife = 0.3; // Explosions are quick
+            this.maxLife = 0.3;
             this.life = this.maxLife;
             this.radius = options.radius;
         } else {
-            // particle
-            this.maxLife = Math.random() * 0.5 + 0.2; // Particles linger a bit
+            this.maxLife = Math.random() * 0.5 + 0.2;
             this.life = this.maxLife;
             this.radius = 0;
             this.color = options.color;
             this.size = Math.random() * 5 + 2;
-            this.vx = (Math.random() - 0.5) * 150; // Random outward velocity
+            this.vx = (Math.random() - 0.5) * 150;
             this.vy = (Math.random() - 0.5) * 150;
         }
     }

@@ -1,18 +1,18 @@
-// src/components/HUD.tsx
+// src/components/hud/HUD.tsx
 
 /**
  * This component renders the main game Heads-Up Display (HUD).
- * It's a "presentational" component, meaning it only displays data and calls
- * functions passed to it via props. It doesn't contain any game logic itself.
+ * It has been updated to receive tower configuration data via props,
+ * removing its dependency on static constants.
  */
 
 import React from 'react';
-import type { IGameState } from '../../types';
-import { TOWER_TYPES } from '../../game/config/constants';
+import type { IGameState, ITowerType } from '../../types';
 
 // Define the props the HUD component expects to receive.
 interface IHUDProps {
     gameState: IGameState;
+    towerTypes: { [key: string]: ITowerType }; // Expects the loaded tower config
     selectedTowerType: string | null;
     onSelectTower: (type: string) => void;
     onStartWave: () => void;
@@ -20,6 +20,7 @@ interface IHUDProps {
 
 export const HUD: React.FC<IHUDProps> = ({
     gameState,
+    towerTypes,
     selectedTowerType,
     onSelectTower,
     onStartWave,
@@ -33,7 +34,7 @@ export const HUD: React.FC<IHUDProps> = ({
                         ❤️ Health: {gameState.playerHealth}
                     </div>
                     <div className="bg-chaos-primary/80 border border-chaos-highlight shadow-lg shadow-chaos-highlight/30 rounded-lg px-4 py-2 text-lg font-bold">
-                        💰 Money: {gameState.money}
+                        💰 Money: <span className="text-chaos-currency">{gameState.money}</span>
                     </div>
                 </div>
                 <div className="bg-chaos-primary/80 border border-chaos-highlight shadow-lg shadow-chaos-highlight/30 rounded-lg px-4 py-2 text-lg font-bold">
@@ -45,7 +46,7 @@ export const HUD: React.FC<IHUDProps> = ({
             <div className="absolute bottom-0 left-0 right-0 p-4 flex justify-between items-end z-10">
                 {/* Tower Selection Buttons */}
                 <div className="flex gap-4">
-                    {Object.entries(TOWER_TYPES).map(([key, tower]) => (
+                    {Object.entries(towerTypes).map(([key, tower]) => (
                         <button
                             key={key}
                             onClick={() => onSelectTower(key)}
@@ -54,7 +55,7 @@ export const HUD: React.FC<IHUDProps> = ({
                                 ${
                                     selectedTowerType === key
                                         ? 'bg-chaos-accent border-chaos-accent text-white scale-105 shadow-lg shadow-chaos-accent/50'
-                                        : 'bg-chaos-secondary border-chaos-highlight hover:border-chaos-accent'
+                                        : 'bg-chaos-secondary border-chaos-highlight hover:border-chaos-interactive'
                                 }
                                 ${
                                     gameState.money < tower.cost
@@ -64,7 +65,7 @@ export const HUD: React.FC<IHUDProps> = ({
                         >
                             <div className="text-xl">{key === 'gatling' ? '💥' : '🚀'}</div>
                             <div className="font-bold">{tower.name}</div>
-                            <div className="text-sm text-yellow-400">Cost: {tower.cost}</div>
+                            <div className="text-sm text-chaos-currency">Cost: {tower.cost}</div>
                         </button>
                     ))}
                 </div>

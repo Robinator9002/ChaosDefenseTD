@@ -2,20 +2,19 @@
 
 /**
  * This custom hook encapsulates the entire game loop logic.
- * It's responsible for updating game state, handling object interactions,
- * and drawing everything to the canvas on each animation frame.
- * By isolating this logic, the main App component remains clean and focused on UI and state management.
+ * It has been updated to accept and use the dynamically loaded game configuration.
  */
 
 import { useCallback, useEffect, useRef } from 'react';
 import { Tower, Enemy, Projectile, Effect } from '../classes/indexClasses';
-import { TOWER_TYPES, WAVES, TILE_SIZE } from '../config/constants';
 import { getDistance } from '../utils/helpers';
+import { TILE_SIZE } from '../config/constants';
+import type { GameConfig } from '../../App';
 import type { IGameState, IGridCell, IPathPoint, IVector, IModalState } from '../../types';
 
-// Define the arguments the hook will accept. This makes the hook's dependencies explicit.
 interface IGameLoopProps {
     canvasRef: React.RefObject<HTMLCanvasElement>;
+    gameConfig: React.MutableRefObject<GameConfig | null>; // Now accepts the loaded config
     gameState: IGameState;
     setGameState: React.Dispatch<React.SetStateAction<IGameState>>;
     setModal: React.Dispatch<React.SetStateAction<IModalState>>;
@@ -33,6 +32,7 @@ interface IGameLoopProps {
 
 export const useGameLoop = ({
     canvasRef,
+    gameConfig,
     gameState,
     setGameState,
     setModal,
@@ -48,12 +48,9 @@ export const useGameLoop = ({
     nextId,
 }: IGameLoopProps) => {
     const screenShake = useRef({ magnitude: 0, duration: 0 });
-    // FIXED: useRef requires an initial value. null is appropriate here.
     const animationFrameId = useRef<number | null>(null);
-    // FIXED: Use a ref to store the last timestamp for deltaTime calculation.
     const lastTimeRef = useRef(0);
 
-    // --- HELPER FUNCTIONS (scoped to the hook) ---
     const triggerScreenShake = useCallback((magnitude: number, duration: number) => {
         screenShake.current = { magnitude, duration };
     }, []);
@@ -73,16 +70,20 @@ export const useGameLoop = ({
         [setModal],
     );
 
-    // --- THE CORE GAME LOOP ---
-    // useCallback ensures this function is not recreated on every render, which is critical for performance.
     const loop = useCallback(
         (timestamp: number) => {
+            // Guard clause: Do not run the loop if config hasn't loaded yet.
+            if (!gameConfig.current) {
+                animationFrameId.current = requestAnimationFrame(loop);
+                return;
+            }
+            const config = gameConfig.current; // Alias for easier access
+
             const canvas = canvasRef.current;
             if (!canvas) return;
             const ctx = canvas.getContext('2d');
             if (!ctx) return;
 
-            // FIXED: Use the ref for lastTime to calculate deltaTime.
             const deltaTime = (timestamp - lastTimeRef.current) / 1000;
             lastTimeRef.current = timestamp;
 
@@ -100,7 +101,7 @@ export const useGameLoop = ({
                         tower.findTarget(enemies.current);
                     }
                     if (tower.target && tower.fireCooldown <= 0) {
-                        const typeData = TOWER_TYPES[tower.type];
+                        const typeData = config.towers[tower.type];
                         projectiles.current.push(
                             new Projectile(
                                 nextId.current++,
@@ -203,12 +204,12 @@ export const useGameLoop = ({
                         isWaveActive: false,
                         money: prev.money + waveBonus,
                     }));
-                    if (gameState.wave >= WAVES.length) {
+                    if (gameState.wave >= config.waves.length) {
                         setGameState((prev) => ({ ...prev, victory: true }));
                         setModal({
                             show: true,
                             title: 'VICTORY!',
-                            text: `You defeated all ${WAVES.length} waves!`,
+                            text: `You defeated all ${config.waves.length} waves!`,
                             color: 'text-yellow-400',
                         });
                     } else {
@@ -232,8 +233,6 @@ export const useGameLoop = ({
                 );
             }
 
-            // Draw path, grid, towers, enemies, etc. (The full drawing logic)
-            // This part is extensive but necessary for rendering the game world.
             ctx.strokeStyle = '#0f3460';
             ctx.lineWidth = TILE_SIZE;
             ctx.lineCap = 'round';
@@ -249,7 +248,7 @@ export const useGameLoop = ({
             if (selectedTowerType) {
                 const gridX = Math.floor(mousePos.current.x / TILE_SIZE);
                 const gridY = Math.floor(mousePos.current.y / TILE_SIZE);
-                const towerType = TOWER_TYPES[selectedTowerType];
+                const towerType = config.towers[selectedTowerType];
                 if (grid.current[gridY]?.[gridX]) {
                     const canPlace =
                         !grid.current[gridY][gridX].isPath &&
@@ -293,12 +292,12 @@ export const useGameLoop = ({
             }
 
             towers.current.forEach((t) => {
-                ctx.fillStyle = TOWER_TYPES[t.type].color;
+                ctx.fillStyle = config.towers[t.type].color;
                 ctx.beginPath();
                 ctx.arc(t.x, t.y, TILE_SIZE * 0.4, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.fillStyle = '#fff';
-                ctx.font = 'bold 14px Inter';
+                ctx.font = 'bold 14px Orbitron';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 ctx.fillText(String(t.level + 1), t.x, t.y);
@@ -317,7 +316,7 @@ export const useGameLoop = ({
             });
 
             enemies.current.forEach((e) => {
-                ctx.fillStyle = e.color;
+                ctx.fillStyle = config.enemies[e.type].color;
                 ctx.beginPath();
                 ctx.arc(e.x, e.y, e.size, 0, Math.PI * 2);
                 ctx.fill();
@@ -358,6 +357,7 @@ export const useGameLoop = ({
         },
         [
             canvasRef,
+            gameConfig,
             gameState,
             setGameState,
             setModal,
@@ -377,9 +377,7 @@ export const useGameLoop = ({
         ],
     );
 
-    // useEffect to start and stop the game loop.
     useEffect(() => {
-        // Initialize lastTime when the loop starts.
         lastTimeRef.current = performance.now();
         animationFrameId.current = requestAnimationFrame(loop);
         return () => {
