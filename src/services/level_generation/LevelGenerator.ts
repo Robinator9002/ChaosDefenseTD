@@ -40,20 +40,16 @@ class LevelGenerator {
         const params: LevelGenerationParams = style.generation_params;
         const TILE_SIZE = ConfigService.configs?.gameSettings.tile_size ?? 32;
 
-        // 1. Initialize the Grid
         const grid = new Grid(params.grid_width, params.grid_height);
-
-        // 2. Generate Paths
         const tilePaths = this.generatePaths(grid, params);
+
         if (tilePaths.length === 0) {
             console.error('[LevelGenerator] Failed to generate any valid paths.');
             return null;
         }
 
-        // 3. Place environmental features (obstacles)
         this.placeFeatures(grid, params);
 
-        // 4. Convert tile-based paths to pixel-based Vector2D paths for enemies
         const pixelPaths = tilePaths.map((path) =>
             path.map((tile) => ({
                 x: tile.x * TILE_SIZE + TILE_SIZE / 2,
@@ -73,13 +69,6 @@ class LevelGenerator {
 
     // --- Private Helper Methods for Generation ---
 
-    /**
-     * Generates all enemy paths for the level based on the configuration.
-     * It carves the paths into the grid and then uses a pathfinder to get the final, ordered list of tiles.
-     * @param grid - The Grid instance to carve paths into.
-     * @param params - The generation parameters for the current level style.
-     * @returns An array of paths, where each path is an array of Tile objects.
-     */
     private generatePaths(grid: Grid, params: LevelGenerationParams): Tile[][] {
         const finalPaths: Tile[][] = [];
         const pathConfigs = params.paths_config;
@@ -92,9 +81,9 @@ class LevelGenerator {
                     case 'elbow':
                         pathTiles = this.generateElbowPath(grid);
                         break;
+                    // --- NEW: Handle wandering path generation ---
                     case 'wandering':
-                        // TODO: Implement wandering path logic
-                        console.warn('[LevelGenerator] "wandering" path type not yet implemented.');
+                        pathTiles = this.generateWanderingPath(grid);
                         break;
                     default:
                         console.warn(`[LevelGenerator] Unknown path type: ${pathType}`);
@@ -109,31 +98,79 @@ class LevelGenerator {
     }
 
     /**
-     * Generates a single path with one 90-degree turn (an "elbow").
-     * It defines start and end points, carves the path, and uses the A* Pathfinder to get the final tile sequence.
+     * NEW: Generates a single, meandering path using a randomized walk.
      * @param grid - The grid to operate on.
      * @returns An array of Tile objects representing the path, or null if it fails.
      */
+    private generateWanderingPath(grid: Grid): Tile[] | null {
+        const margin = 5; // Give wandering path more room to breathe
+        const startY = Math.floor(Math.random() * (grid.height - margin * 2)) + margin;
+        const start: Vector2D = { x: 0, y: startY };
+        const end: Vector2D = { x: grid.width - 1, y: 0 }; // End Y is determined by the walk
+
+        let currentX = start.x;
+        let currentY = start.y;
+        let endY = -1;
+
+        // A simple "drunken walk" algorithm
+        while (currentX < grid.width - 1) {
+            // Carve current position
+            if (grid.isValidCoord(currentX, currentY)) {
+                grid.setTileType(currentX, currentY, 'PATH');
+            }
+
+            // Decide next move
+            const roll = Math.random();
+            if (roll < 0.6) {
+                // 60% chance to move forward
+                currentX++;
+            } else if (roll < 0.8) {
+                // 20% chance to move up
+                currentY = Math.max(margin, currentY - 1);
+            } else {
+                // 20% chance to move down
+                currentY = Math.min(grid.height - 1 - margin, currentY + 1);
+            }
+        }
+
+        // Complete the path to the edge
+        endY = currentY;
+        this.carveLine(grid, currentX, currentY, grid.width - 1, endY, 'PATH');
+        end.y = endY;
+
+        grid.setTileType(start.x, start.y, 'spawn');
+        grid.setTileType(end.x, end.y, 'end');
+
+        const pathfinderGrid = this.createPathfinderGrid(grid);
+        const tilePathCoords = Pathfinder.findPath(pathfinderGrid, start, end);
+
+        if (tilePathCoords.length === 0) {
+            console.error(
+                '[LevelGenerator] Pathfinder could not find a route on the carved wandering path.',
+            );
+            return null;
+        }
+
+        return tilePathCoords
+            .map((coord) => grid.getTile(coord.x, coord.y))
+            .filter(Boolean) as Tile[];
+    }
+
     private generateElbowPath(grid: Grid): Tile[] | null {
-        const margin = 3; // Prevent paths from starting/ending at the very edge
+        const margin = 3;
         const startY = Math.floor(Math.random() * (grid.height - margin * 2)) + margin;
         const endY = Math.floor(Math.random() * (grid.height - margin * 2)) + margin;
         const start: Vector2D = { x: 0, y: startY };
         const end: Vector2D = { x: grid.width - 1, y: endY };
-
-        // Determine the point where the path turns
         const elbowX = Math.floor(Math.random() * (grid.width - margin * 4)) + margin * 2;
 
-        // Carve the path into the grid by setting tile types
         this.carveLine(grid, start.x, start.y, elbowX, start.y, 'PATH');
         this.carveLine(grid, elbowX, start.y, elbowX, end.y, 'PATH');
         this.carveLine(grid, elbowX, end.y, end.x, end.y, 'PATH');
 
-        // Mark start and end tiles specifically
         grid.setTileType(start.x, start.y, 'spawn');
         grid.setTileType(end.x, end.y, 'end');
 
-        // Now, use the Pathfinder to find the official path along the carved tiles
         const pathfinderGrid = this.createPathfinderGrid(grid);
         const tilePathCoords = Pathfinder.findPath(pathfinderGrid, start, end);
 
@@ -144,25 +181,19 @@ class LevelGenerator {
             return null;
         }
 
-        // Convert the Vector2D coordinates back to Tile objects
         return tilePathCoords
             .map((coord) => grid.getTile(coord.x, coord.y))
             .filter(Boolean) as Tile[];
     }
 
-    /**
-     * Helper to draw a straight line of a specific tile type on the grid.
-     */
     private carveLine(grid: Grid, x1: number, y1: number, x2: number, y2: number, type: TileType) {
         const dx = Math.abs(x2 - x1);
         const dy = Math.abs(y2 - y1);
         const sx = x1 < x2 ? 1 : -1;
         const sy = y1 < y2 ? 1 : -1;
         let err = dx - dy;
-
         let x = x1;
         let y = y1;
-
         while (true) {
             if (grid.isValidCoord(x, y)) {
                 grid.setTileType(x, y, type);
@@ -180,12 +211,6 @@ class LevelGenerator {
         }
     }
 
-    /**
-     * Creates a simplified numerical grid for the A* Pathfinder.
-     * Walkable tiles are marked as 0, all others as 1 (obstacle).
-     * @param grid - The game's logical Grid object.
-     * @returns A 2D number array suitable for the Pathfinder service.
-     */
     private createPathfinderGrid(grid: Grid): number[][] {
         const pathfinderGrid: number[][] = [];
         for (let y = 0; y < grid.height; y++) {
@@ -201,33 +226,21 @@ class LevelGenerator {
         return pathfinderGrid;
     }
 
-    /**
-     * Places environmental features (obstacles) onto the grid.
-     * @param grid - The Grid instance to add features to.
-     * @param params - The generation parameters for the current level style.
-     */
     private placeFeatures(grid: Grid, params: LevelGenerationParams): void {
         const features = params.features;
         if (!features) return;
-
         for (const featureName in features) {
             const config = features[featureName];
             const count = Math.floor(Math.random() * (config.max - config.min + 1)) + config.min;
-
-            // Convert plural lowercase 'mountains' to singular uppercase 'MOUNTAIN'
             const tileType = featureName.slice(0, -1).toUpperCase() as TileType;
-
             for (let i = 0; i < count; i++) {
-                // Try to place a feature a few times before giving up
                 for (let attempt = 0; attempt < 10; attempt++) {
                     const x = Math.floor(Math.random() * grid.width);
                     const y = Math.floor(Math.random() * grid.height);
                     const tile = grid.getTile(x, y);
-
-                    // Only place features on 'BUILDABLE' ground
                     if (tile && tile.tileType === 'BUILDABLE') {
                         grid.setTileType(x, y, tileType);
-                        break; // Move to the next feature instance
+                        break;
                     }
                 }
             }
